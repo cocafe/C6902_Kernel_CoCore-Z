@@ -455,3 +455,5 @@ CFLAGS_board-rdtags.o  := \
 	-D"INFO_BUILDID=\"$(if $(SEMC_SYSTEM_VERSION),$(SEMC_SYSTEM_VERSION),private)\""
 
 CFLAGS_board-8974-console.o += -Idrivers/staging/android
+
+obj-$(CONFIG_HAS_MACH_MEMUTILS) += memutils/
