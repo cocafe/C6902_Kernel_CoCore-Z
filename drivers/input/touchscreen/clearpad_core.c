@@ -482,6 +482,8 @@ static struct synaptics_clearpad *p_this;
 #define ABS_THRESHOLD_X			450
 #define ABS_THRESHOLD_Y			600
 
+static struct wake_lock s2w_wakelock;
+
 static bool s2w_enable = false;
 static bool s2w_down   = false;
 
@@ -4185,6 +4187,7 @@ static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr
 	sprintf(buf,   "%s\n", s2w_enable ? "on" : "off");
 	sprintf(buf, "%sthrehold_x: %d\n", buf, x_threshold);
 	sprintf(buf, "%sthrehold_y: %d\n", buf, y_threshold);
+	sprintf(buf, "%swakelock_ena: %d\n", buf, wake_lock_active(&s2w_wakelock));
 
 	return strlen(buf);
 }
@@ -4200,6 +4203,8 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		device_init_wakeup(&p_this->pdev->dev, 1);
 		UNLOCK(p_this);
 
+		wake_lock(&s2w_wakelock);
+
 		return count;
 	}
 
@@ -4209,6 +4214,8 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		p_this->easy_wakeup_config.gesture_enable = false;
 		device_init_wakeup(&p_this->pdev->dev, 0);
 		UNLOCK(p_this);
+
+		wake_unlock(&s2w_wakelock);
 
 		return count;
 	}
@@ -4221,6 +4228,16 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 
 	if (sscanf(buf, "threshold_y=%u", &val)) {
 		y_threshold = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "wakelock=%u", &val)) {
+		if (!val)
+			wake_unlock(&s2w_wakelock);
+		else
+			wake_lock(&s2w_wakelock);
+			
 
 		return count;
 	}
@@ -4412,6 +4429,8 @@ static int __devinit clearpad_probe(struct platform_device *pdev)
 #endif
 
 	p_this = this;
+
+	wake_lock_init(&s2w_wakelock, WAKE_LOCK_SUSPEND, "s2w_wakelock");
 
 	clearpad_kobject = kobject_create_and_add("clearpad", kernel_kobj);
 	if (!clearpad_kobject) {
