@@ -479,8 +479,8 @@ struct synaptics_clearpad {
 
 static struct synaptics_clearpad *p_this;
 
-#define ABS_THRESHOLD_X			450
-#define ABS_THRESHOLD_Y			600
+#define ABS_THRESHOLD_X			400
+#define ABS_THRESHOLD_Y			500
 
 static struct wake_lock s2w_wakelock;
 
