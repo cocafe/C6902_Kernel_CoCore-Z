@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/regulator/consumer.h>
 #include <linux/gpio.h>
+#include <linux/qpnp-led-rgb.h>
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
 #endif
@@ -486,6 +487,13 @@ static struct wake_lock s2w_wakelock;
 
 static bool s2w_enable = false;
 static bool s2w_down   = false;
+static bool s2w_led    = true;
+
+static int s2w_color[] = { 
+	12,	/* R */
+	213,	/* G */
+	253,	/* B */
+};
 
 static int x_down, x_up;
 static int y_down, y_up;
@@ -4184,7 +4192,9 @@ exit:
 
 static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	sprintf(buf,   "%s\n", s2w_enable ? "on" : "off");
+	sprintf(buf,   "status: %s\n", s2w_enable ? "on" : "off");
+	sprintf(buf, "%sled: %d\n", buf, s2w_led);
+	sprintf(buf, "%srgb: %d %d %d\n", buf, s2w_color[0], s2w_color[1], s2w_color[2]);
 	sprintf(buf, "%sthrehold_x: %d\n", buf, x_threshold);
 	sprintf(buf, "%sthrehold_y: %d\n", buf, y_threshold);
 	sprintf(buf, "%swakelock_ena: %d\n", buf, wake_lock_active(&s2w_wakelock));
@@ -4194,7 +4204,7 @@ static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr
 
 static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	int val;
+	int val, r, g, b;
 
 	if (sysfs_streq(buf, "on")) {
 		LOCK(p_this);
@@ -4202,8 +4212,12 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		p_this->easy_wakeup_config.gesture_enable = true;
 		device_init_wakeup(&p_this->pdev->dev, 1);
 		UNLOCK(p_this);
-
 		wake_lock(&s2w_wakelock);
+		if (s2w_led) {
+			qpnp_led_rgb_set(COLOR_RED,   s2w_color[0]);
+			qpnp_led_rgb_set(COLOR_GREEN, s2w_color[1]);
+			qpnp_led_rgb_set(COLOR_BLUE,  s2w_color[2]);
+		}
 
 		return count;
 	}
@@ -4214,8 +4228,12 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		p_this->easy_wakeup_config.gesture_enable = false;
 		device_init_wakeup(&p_this->pdev->dev, 0);
 		UNLOCK(p_this);
-
 		wake_unlock(&s2w_wakelock);
+		if (s2w_led) {
+			qpnp_led_rgb_set(COLOR_RED,   0);
+			qpnp_led_rgb_set(COLOR_GREEN, 0);
+			qpnp_led_rgb_set(COLOR_BLUE,  0);
+		}
 
 		return count;
 	}
@@ -4242,12 +4260,30 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		return count;
 	}
 
+	if (sscanf(buf, "led=%u", &val)) {
+		s2w_led = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "rgb=%u %u %u", &r, &g, &b)) {
+		if (r > 304 || g > 304 || b > 304) {
+			return -EINVAL;
+		}
+
+		s2w_color[0] = r;
+		s2w_color[1] = g;
+		s2w_color[2] = b;
+
+		return count;
+	}
+
 	return count;
 }
 static struct kobj_attribute sweep2wake_interface = __ATTR(sweep2wake, 0644, sweep2wake_show, sweep2wake_store);
 
 static struct attribute *clearpad_attrs[] = {
-	&sweep2wake_interface.attr, 
+	&sweep2wake_interface.attr,
 	NULL,
 };
 
