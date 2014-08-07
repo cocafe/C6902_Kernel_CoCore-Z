@@ -495,6 +495,34 @@ static int s2w_color[] = {
 	253,	/* B */
 };
 
+static int s2w_check_color(void)
+{
+	if (qpnp_led_rgb_get(COLOR_RED) != s2w_color[0])
+		return 0;
+
+	if (qpnp_led_rgb_get(COLOR_GREEN) != s2w_color[1])
+		return 0;
+
+	if (qpnp_led_rgb_get(COLOR_BLUE) != s2w_color[2])
+		return 0;
+
+	/* Same color */
+	return 1;
+}
+
+static void s2w_set_led(int enable)
+{
+	if (enable) {
+		qpnp_led_rgb_set(COLOR_RED,   s2w_color[0]);
+		qpnp_led_rgb_set(COLOR_GREEN, s2w_color[1]);
+		qpnp_led_rgb_set(COLOR_BLUE,  s2w_color[2]);
+	} else if (s2w_check_color()){
+		qpnp_led_rgb_set(COLOR_RED,   0);
+		qpnp_led_rgb_set(COLOR_GREEN, 0);
+		qpnp_led_rgb_set(COLOR_BLUE,  0);
+	}
+}
+
 static int x_down, x_up;
 static int y_down, y_up;
 
@@ -3626,6 +3654,10 @@ static void synaptics_notify_resume(struct work_struct *work)
 	struct synaptics_clearpad *this = container_of(work,
 			struct synaptics_clearpad, notify_resume);
 
+	if (s2w_led) {
+		s2w_set_led(0);
+	}
+
 	if (!(this->active & SYN_ACTIVE_POWER))
 		synaptics_clearpad_resume(&this->pdev->dev);
 }
@@ -3634,6 +3666,10 @@ static void synaptics_notify_suspend(struct work_struct *work)
 {
 	struct synaptics_clearpad *this = container_of(work,
 			struct synaptics_clearpad, notify_suspend);
+
+	if (s2w_led) {
+		s2w_set_led(1);
+	}
 
 	if (this->active & SYN_ACTIVE_POWER)
 		synaptics_clearpad_suspend(&this->pdev->dev);
@@ -4213,11 +4249,6 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		device_init_wakeup(&p_this->pdev->dev, 1);
 		UNLOCK(p_this);
 		wake_lock(&s2w_wakelock);
-		if (s2w_led) {
-			qpnp_led_rgb_set(COLOR_RED,   s2w_color[0]);
-			qpnp_led_rgb_set(COLOR_GREEN, s2w_color[1]);
-			qpnp_led_rgb_set(COLOR_BLUE,  s2w_color[2]);
-		}
 
 		return count;
 	}
@@ -4230,9 +4261,7 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 		UNLOCK(p_this);
 		wake_unlock(&s2w_wakelock);
 		if (s2w_led) {
-			qpnp_led_rgb_set(COLOR_RED,   0);
-			qpnp_led_rgb_set(COLOR_GREEN, 0);
-			qpnp_led_rgb_set(COLOR_BLUE,  0);
+			s2w_set_led(0);
 		}
 
 		return count;
