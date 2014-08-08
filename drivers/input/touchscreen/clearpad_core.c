@@ -3654,8 +3654,10 @@ static void synaptics_notify_resume(struct work_struct *work)
 	struct synaptics_clearpad *this = container_of(work,
 			struct synaptics_clearpad, notify_resume);
 
-	if (s2w_led) {
-		s2w_set_led(0);
+	if (s2w_enable) {
+		if (s2w_led) {
+			s2w_set_led(0);
+		}
 	}
 
 	if (!(this->active & SYN_ACTIVE_POWER))
@@ -3667,8 +3669,10 @@ static void synaptics_notify_suspend(struct work_struct *work)
 	struct synaptics_clearpad *this = container_of(work,
 			struct synaptics_clearpad, notify_suspend);
 
-	if (s2w_led) {
-		s2w_set_led(1);
+	if (s2w_enable) {
+		if (s2w_led) {
+			s2w_set_led(1);
+		}
 	}
 
 	if (this->active & SYN_ACTIVE_POWER)
