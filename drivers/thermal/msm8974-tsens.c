@@ -25,6 +25,7 @@
 #include <linux/msm_tsens.h>
 #include <linux/err.h>
 #include <linux/of.h>
+#include <linux/moduleparam.h>
 
 #include <mach/msm_iomap.h>
 
@@ -284,6 +285,9 @@ struct tsens_tm_device {
 
 struct tsens_tm_device *tmdev;
 
+static bool temp_enable = true;
+module_param(temp_enable, bool, 0644);
+
 int tsens_get_sw_id_mapping(int sensor_hw_num, int *sensor_sw_idx)
 {
 	int i = 0;
@@ -392,6 +396,9 @@ static int tsens_tz_get_temp(struct thermal_zone_device *thermal,
 			     unsigned long *temp)
 {
 	struct tsens_tm_device_sensor *tm_sensor = thermal->devdata;
+
+	if (!temp_enable)
+		return -EINVAL;
 
 	if (!tm_sensor || tm_sensor->mode != THERMAL_DEVICE_ENABLED || !temp)
 		return -EINVAL;
