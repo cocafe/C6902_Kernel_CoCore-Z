@@ -36,6 +36,7 @@
 #include <linux/input.h>
 #include <linux/switch.h>
 #include <linux/kobject.h>
+#include <linux/qpnp-led-rgb.h>
 
 /* Interrupt offsets */
 #define INT_RT_STS(base)			(base + 0x10)
@@ -493,6 +494,13 @@ struct qpnp_chg_chip {
 
 struct qpnp_chg_chip *p_chip;
 
+static bool eoc_notice = true;
+static int  eoc_ok     = 0;
+static int  eoc_led[]  = {
+	255,
+	255,
+	255
+};
 
 static struct of_device_id qpnp_charger_match_table[] = {
 	{ .compatible = QPNP_CHARGER_DEV_NAME, },
@@ -4118,6 +4126,14 @@ qpnp_eoc_work(struct work_struct *work)
 				if (!chip->somc_params.resume_delta_soc)
 					qpnp_chg_enable_irq(
 						&chip->chg_vbatdet_lo);
+
+				if (eoc_notice) {
+					eoc_ok = 1;
+					qpnp_led_rgb_set(COLOR_RED, eoc_led[0]);
+					qpnp_led_rgb_set(COLOR_RED, eoc_led[1]);
+					qpnp_led_rgb_set(COLOR_RED, eoc_led[2]);
+				}
+
 				goto stop_eoc;
 			} else {
 				count += 1;
@@ -6252,9 +6268,47 @@ static ssize_t max_iusb_store(struct kobject *kobj, struct kobj_attribute *attr,
 }
 static struct kobj_attribute max_iusb_interface = __ATTR(max_iusb, 0644, max_iusb_show, max_iusb_store);
 
+static ssize_t eoc_led_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf,   "status: %s\n", eoc_notice ? "on" : "off");
+	sprintf(buf, "%seoc:    %s\n", buf, eoc_ok ? "yes" : "no");
+	sprintf(buf, "%sled: %d %d %d\n", buf, eoc_led[0], eoc_led[1], eoc_led[2]);
+
+	return strlen(buf);
+}
+
+static ssize_t eoc_led_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int r, g, b;
+
+	if (sysfs_streq(buf, "on")) {
+		eoc_notice = true;
+
+		return count;
+	}
+
+	if (sysfs_streq(buf, "off")) {
+		eoc_notice = false;
+
+		return count;
+	}
+
+	if (sscanf(buf, "led=%u %u %u", &r, &g, &b) == 3) {
+		eoc_led[0] = r;
+		eoc_led[1] = g;
+		eoc_led[2] = b;
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+static struct kobj_attribute eoc_led_interface = __ATTR(eoc_led, 0644, eoc_led_show, eoc_led_store);
+
 static struct attribute *qpnp_charger_attrs[] = {
 	&max_idc_interface.attr,
 	&max_iusb_interface.attr,
+	&eoc_led_interface.attr,
 	NULL,
 };
 
