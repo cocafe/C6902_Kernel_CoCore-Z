@@ -35,6 +35,7 @@
 #include <linux/spinlock.h>
 #include <linux/input.h>
 #include <linux/switch.h>
+#include <linux/kobject.h>
 
 /* Interrupt offsets */
 #define INT_RT_STS(base)			(base + 0x10)
@@ -489,6 +490,8 @@ struct qpnp_chg_chip {
 	bool				power_stage_workaround_enable;
 	struct qpnp_somc_params		somc_params;
 };
+
+struct qpnp_chg_chip *p_chip;
 
 
 static struct of_device_id qpnp_charger_match_table[] = {
@@ -5702,6 +5705,8 @@ qpnp_charger_probe(struct spmi_device *spmi)
 		return -ENOMEM;
 	}
 
+	p_chip = chip;
+
 	chip->prev_usb_max_ma = -EINVAL;
 	chip->fake_battery_soc = -EINVAL;
 	chip->dev = &(spmi->dev);
@@ -6205,6 +6210,76 @@ qpnp_chg_exit(void)
 }
 module_exit(qpnp_chg_exit);
 
+static ssize_t max_idc_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	int data;
+
+	qpnp_chg_idcmax_get(p_chip, &data);
+
+	return sprintf(buf, "%u mA\n", data);
+}
+
+static ssize_t max_idc_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%u", &val)) {
+		qpnp_chg_idcmax_set(p_chip, val);
+	}
+
+	return count;
+}
+static struct kobj_attribute max_idc_interface = __ATTR(max_idc, 0644, max_idc_show, max_idc_store);
+
+static ssize_t max_iusb_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	int data;
+
+	qpnp_chg_iusbmax_get(p_chip, &data);
+
+	return sprintf(buf, "%u mA\n", data);
+}
+
+static ssize_t max_iusb_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%u", &val)) {
+		qpnp_chg_iusbmax_set(p_chip, val);
+	}
+
+	return count;
+}
+static struct kobj_attribute max_iusb_interface = __ATTR(max_iusb, 0644, max_iusb_show, max_iusb_store);
+
+static struct attribute *qpnp_charger_attrs[] = {
+	&max_idc_interface.attr,
+	&max_iusb_interface.attr,
+	NULL,
+};
+
+static struct attribute_group qpnp_charger_interface_group = {
+	.attrs = qpnp_charger_attrs,
+};
+
+static struct kobject *qpnp_charger_kobject;
+
+static int __init qpnp_charger_sysfs_init(void)
+{
+	int ret;
+
+	qpnp_charger_kobject = kobject_create_and_add("qpnp-charger", kernel_kobj);
+	if (!qpnp_charger_kobject) {
+		pr_err("qpnp_charger: Failed to create kobject interface\n");
+	}
+	ret = sysfs_create_group(qpnp_charger_kobject, &qpnp_charger_interface_group);
+	if (ret) {
+		kobject_put(qpnp_charger_kobject);
+	}
+
+        return 0;
+}
+late_initcall(qpnp_charger_sysfs_init);
 
 MODULE_DESCRIPTION("QPNP charger driver");
 MODULE_LICENSE("GPL v2");
