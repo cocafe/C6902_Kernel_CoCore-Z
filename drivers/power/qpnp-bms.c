@@ -4273,6 +4273,24 @@ enum {
 	FCC_SAMPLES,
 };
 
+static ssize_t qpnp_bms_recalc_soc_show(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	return 0;
+}
+
+static ssize_t qpnp_bms_recalc_soc_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct qpnp_bms_chip *chip = dev_get_drvdata(dev);
+
+	schedule_work(&chip->recalc_work);
+
+	return count;
+}
+
 static ssize_t qpnp_bms_param_show(struct device *dev,
 				struct device_attribute *attr,
 				char *buf);
@@ -4309,6 +4327,8 @@ static struct device_attribute qpnp_bms_attrs[] = {
 						qpnp_bms_param_store),
 	__ATTR(fcc_new_mah, S_IRUGO, qpnp_bms_param_show, NULL),
 	__ATTR(fcc_samples, S_IRUGO, qpnp_bms_param_show, NULL),
+	__ATTR(recalc_soc, S_IRUGO|S_IWUSR, qpnp_bms_recalc_soc_show,
+					qpnp_bms_recalc_soc_store),
 };
 
 static ssize_t qpnp_bms_param_show(struct device *dev,
