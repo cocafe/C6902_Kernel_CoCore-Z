@@ -495,11 +495,11 @@ struct qpnp_chg_chip {
 struct qpnp_chg_chip *p_chip;
 
 static bool eoc_notice = true;
-static int  eoc_ok     = 0;
+static int  eoc_last   = 0;
 static int  eoc_led[]  = {
-	255,
-	255,
-	255
+	155,
+	511,
+	0
 };
 
 static struct of_device_id qpnp_charger_match_table[] = {
@@ -4128,10 +4128,10 @@ qpnp_eoc_work(struct work_struct *work)
 						&chip->chg_vbatdet_lo);
 
 				if (eoc_notice) {
-					eoc_ok = 1;
-					qpnp_led_rgb_set(COLOR_RED, eoc_led[0]);
-					qpnp_led_rgb_set(COLOR_RED, eoc_led[1]);
-					qpnp_led_rgb_set(COLOR_RED, eoc_led[2]);
+					eoc_last = 1;
+					qpnp_led_rgb_set(COLOR_RED,   eoc_led[0]);
+					qpnp_led_rgb_set(COLOR_GREEN, eoc_led[1]);
+					qpnp_led_rgb_set(COLOR_BLUE,  eoc_led[2]);
 				}
 
 				goto stop_eoc;
@@ -6271,7 +6271,7 @@ static struct kobj_attribute max_iusb_interface = __ATTR(max_iusb, 0644, max_ius
 static ssize_t eoc_led_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf,   "status: %s\n", eoc_notice ? "on" : "off");
-	sprintf(buf, "%seoc:    %s\n", buf, eoc_ok ? "yes" : "no");
+	sprintf(buf, "%seoc_last: %s\n", buf, eoc_last ? "yes" : "no");
 	sprintf(buf, "%sled: %d %d %d\n", buf, eoc_led[0], eoc_led[1], eoc_led[2]);
 
 	return strlen(buf);
