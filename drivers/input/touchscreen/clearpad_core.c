@@ -4235,8 +4235,8 @@ static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr
 	sprintf(buf,   "status: %s\n", s2w_enable ? "on" : "off");
 	sprintf(buf, "%sled: %d\n", buf, s2w_led);
 	sprintf(buf, "%srgb: %d %d %d\n", buf, s2w_color[0], s2w_color[1], s2w_color[2]);
-	sprintf(buf, "%sthrehold_x: %d\n", buf, x_threshold);
-	sprintf(buf, "%sthrehold_y: %d\n", buf, y_threshold);
+	sprintf(buf, "%sthreshold_x: %d\n", buf, x_threshold);
+	sprintf(buf, "%sthreshold_y: %d\n", buf, y_threshold);
 	sprintf(buf, "%swakelock_ena: %d\n", buf, wake_lock_active(&s2w_wakelock));
 
 	return strlen(buf);
