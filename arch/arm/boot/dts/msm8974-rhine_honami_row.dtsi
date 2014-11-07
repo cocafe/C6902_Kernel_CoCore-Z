@@ -35,7 +35,7 @@
 	i2c_2: i2c@f9924000 {
 		cell-index = <0>;
 		compatible = "qcom,i2c-qup";
-		qcom,i2c-bus-freq = <355000>;
+		qcom,i2c-bus-freq = <400000>;
 		qcom,scl-gpio = <&msmgpio 7 0x00>;
 		qcom,sda-gpio = <&msmgpio 6 0x00>;
 		status = "ok";
@@ -91,7 +91,7 @@
 		reg-names = "qup_phys_addr";
 		interrupts = <0 100 0>;
 		interrupt-names = "qup_err_intr";
-		qcom,i2c-bus-freq = <355000>;
+		qcom,i2c-bus-freq = <400000>;
 		qcom,i2c-src-freq = <50000000>;
 		qcom,master-id = <86>;
 		status = "ok";
