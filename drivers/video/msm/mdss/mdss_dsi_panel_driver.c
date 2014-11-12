@@ -25,6 +25,7 @@
 #include <linux/qpnp/pwm.h>
 #include <linux/err.h>
 #include <linux/regulator/consumer.h>
+#include <linux/mdss_dsi_panel.h>
 
 #include "mdss_mdp.h"
 #include "mdss_dsi.h"
@@ -37,6 +38,13 @@
 #define DSI_PCLK_MIN 3300000
 #define DSI_PCLK_MAX 223000000
 #define DSI_PCLK_DEFAULT 35000000
+
+int mdss_dsi_panel_is_on = DISPLAY_ON;
+
+int mdss_panel_status(void)
+{
+	return mdss_dsi_panel_is_on;
+}
 
 struct device virtdev;
 
@@ -528,6 +536,8 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
+	mdss_dsi_panel_is_on = DISPLAY_ON;
+
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
@@ -591,6 +601,8 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		pr_err("%s: Invalid input data\n", __func__);
 		return -EINVAL;
 	}
+
+	mdss_dsi_panel_is_on = DISPLAY_OFF;
 
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
