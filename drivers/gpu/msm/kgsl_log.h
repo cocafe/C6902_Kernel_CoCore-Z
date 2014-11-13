@@ -13,12 +13,7 @@
 #ifndef __KGSL_LOG_H
 #define __KGSL_LOG_H
 
-#define KGSL_LOG_INFO(dev, lvl, fmt, args...) \
-	do { \
-		if ((lvl) >= 6)  \
-			dev_info(dev, "|%s| " fmt, \
-					__func__, ##args);\
-	} while (0)
+#define KGSL_LOG_INFO(dev, lvl, fmt, args...)
 
 #define KGSL_LOG_WARN(dev, lvl, fmt, args...) \
 	do { \
