@@ -497,9 +497,9 @@ struct qpnp_chg_chip *p_chip;
 static bool eoc_notice = true;
 static int  eoc_last   = 0;
 static int  eoc_led[]  = {
-	155,
-	511,
-	0
+	255,
+	255,
+	255
 };
 
 static struct of_device_id qpnp_charger_match_table[] = {
