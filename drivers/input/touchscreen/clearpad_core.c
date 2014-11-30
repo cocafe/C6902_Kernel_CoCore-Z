@@ -4230,6 +4230,25 @@ exit:
 }
 #endif /* CONFIG_DEBUG_FS */
 
+static ssize_t chip_ver_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	switch (p_this->chip)
+	{
+		case SYN_CHIP_3000:
+			sprintf(buf, "Clearpad 3000\n");
+			break;
+		case SYN_CHIP_3200:
+			sprintf(buf, "Clearpad 3200\n");
+			break;
+		case SYN_CHIP_3400:
+			sprintf(buf, "Clearpad 3400\n");
+			break;
+	}
+
+	return strlen(buf);
+}
+static struct kobj_attribute chip_ver_interface = __ATTR(chip_ver, 0644, chip_ver_show, NULL);
+
 static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf,   "status: %s\n", s2w_enable ? "on" : "off");
@@ -4315,7 +4334,136 @@ static ssize_t sweep2wake_store(struct kobject *kobj, struct kobj_attribute *att
 }
 static struct kobj_attribute sweep2wake_interface = __ATTR(sweep2wake, 0644, sweep2wake_show, sweep2wake_store);
 
+static u8 rreg_last[4] = {0, 0, 0, 0};
+
+static ssize_t REG_R_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	int rc = 0;
+
+	rc = synaptics_read(p_this, rreg_last[0], rreg_last[1], rreg_last[2], &rreg_last[3], 1);
+	if (rc)
+		return -EIO;
+
+	sprintf(buf, "%#04x\n", (u32)rreg_last[3]);
+
+	return strlen(buf);
+}
+static ssize_t REG_R_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	u32 page, type, addr;
+
+	if (sscanf(buf, "%x %x %x", &page, &type, &addr) != 3)
+		return -EINVAL;
+
+	rreg_last[0] = page;
+	rreg_last[1] = type;
+	rreg_last[2] = addr;
+
+	return count;
+}
+static struct kobj_attribute REG_R_interface = __ATTR(REG_R, 0644, REG_R_show, REG_R_store);
+
+static ssize_t REG_W_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "FUNC TYPE ADDR VAL\n");
+
+	return strlen(buf);
+}
+static ssize_t REG_W_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int rc = 0;
+	u32 page, type, addr, val;
+
+	if (sscanf(buf, "%x %x %x %x", &page, &type, &addr, &val) != 4)
+		return -EINVAL;
+
+	rc = synaptics_put(p_this, page, type, (u8)addr, (u8)val);
+	if (rc)
+		return -EIO;
+
+	return count;
+}
+static struct kobj_attribute REG_W_interface = __ATTR(REG_W, 0644, REG_W_show, REG_W_store);
+
+#define _DEBUG_ATTR_QUERY(_FUNC, _REGS)								\
+static ssize_t _FUNC##_Query_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)	\
+{												\
+	int i = 0, rc = 0;									\
+	u8 reg;											\
+												\
+	sprintf(buf, "Register Map:\n");							\
+												\
+	for (i = 0; i <= _REGS; i++) {								\
+		rc = synaptics_read(p_this, SYNF(_FUNC, QUERY, i), &reg, 1);			\
+		if (rc)										\
+			sprintf(buf, "%s%#04x         ERR\n", buf, i);				\
+		else										\
+			sprintf(buf, "%s%#04x         %#04x\n", buf, i, (u32)reg);		\
+	}											\
+												\
+	return strlen(buf);									\
+}												\
+static struct kobj_attribute _FUNC##_Query_interface = 						\
+		__ATTR(_FUNC##_Query, 0444, _FUNC##_Query_show, NULL);
+
+#define _DEBUG_ATTR_CTRL(_FUNC, _REGS)								\
+static ssize_t _FUNC##_Ctrl_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)	\
+{												\
+	int i = 0, rc = 0;									\
+	u8  reg;										\
+												\
+	sprintf(buf, "Register Map:\n");							\
+												\
+	for (i = 0; i <= _REGS; i++) {								\
+		rc = synaptics_read(p_this, SYNF(_FUNC, CTRL, i), &reg, 1);			\
+		if (rc)										\
+			sprintf(buf, "%s%#04x         ERR\n", buf, i);				\
+		else										\
+			sprintf(buf, "%s%#04x         %#04x\n", buf, i, (u32)reg);		\
+	}											\
+												\
+	return strlen(buf);									\
+}												\
+static ssize_t _FUNC##_Ctrl_store								\
+(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)		\
+{												\
+	int rc = 0;										\
+	u32 reg, val;										\
+												\
+	if (sscanf(buf, "%x %x", &reg, &val) == 2) {						\
+		rc = synaptics_put(p_this, SYNF(_FUNC, CTRL, (u8)reg), (u8)val);		\
+		if (rc)										\
+			return -EIO;								\
+		return count;									\
+	}											\
+												\
+	return -EINVAL;										\
+}												\
+static struct kobj_attribute _FUNC##_Ctrl_interface = 						\
+		__ATTR(_FUNC##_Ctrl, 0644, _FUNC##_Ctrl_show, _FUNC##_Ctrl_store);
+
+_DEBUG_ATTR_QUERY(F11_2D, 0x1a);
+_DEBUG_ATTR_QUERY(F12_2D, 0x1a);
+_DEBUG_ATTR_CTRL(F11_2D, 0x13);
+_DEBUG_ATTR_CTRL(F12_2D, 0x1c);
+
+static struct attribute *clearpad_debug_attrs[] = {
+	&REG_R_interface.attr,
+	&REG_W_interface.attr,
+	&F11_2D_Query_interface.attr,
+	&F12_2D_Query_interface.attr,
+	&F11_2D_Ctrl_interface.attr,
+	&F12_2D_Ctrl_interface.attr,
+	NULL,
+};
+
+static struct attribute_group clearpad_debug_attr_group = {
+	.name  = "debug",
+	.attrs = clearpad_debug_attrs,
+};
+
 static struct attribute *clearpad_attrs[] = {
+	&chip_ver_interface.attr,
 	&sweep2wake_interface.attr,
 	NULL,
 };
@@ -4508,6 +4656,10 @@ static int __devinit clearpad_probe(struct platform_device *pdev)
 	rc = sysfs_create_group(clearpad_kobject, &clearpad_interface_group);
 	if (rc) {
 		kobject_put(clearpad_kobject);
+	}
+	rc = sysfs_create_group(clearpad_kobject, &clearpad_debug_attr_group);
+	if (rc) {
+		pr_err("clearpad: Failed to create debug attr group\n");
 	}
 
 	/* create symlink */
