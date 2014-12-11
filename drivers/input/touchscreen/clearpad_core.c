@@ -2092,21 +2092,13 @@ static void synaptics_funcarea_initialize(struct synaptics_clearpad *this)
 			input_set_abs_params(this->input, ABS_MT_POSITION_Y,
 					     pointer_area.y1,
 					     pointer_area.y2, 0, 0);
-			if (this->touch_pressure_enabled)
-				input_set_abs_params(this->input,
-					ABS_MT_PRESSURE, 0,
-					SYNAPTICS_MAX_Z_VALUE, 0, 0);
-			if (this->touch_size_enabled) {
-				input_set_abs_params(this->input,
-					ABS_MT_TOUCH_MAJOR, 0,
-					SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
-				input_set_abs_params(this->input,
-					ABS_MT_TOUCH_MINOR, 0,
-					SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
-			}
-			if (this->touch_orientation_enabled)
-				input_set_abs_params(this->input,
-					ABS_MT_ORIENTATION, -1, 1, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_PRESSURE, 0,
+						SYNAPTICS_MAX_Z_VALUE, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_TOUCH_MAJOR, 0,
+						SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_TOUCH_MINOR, 0,
+						SYNAPTICS_MAX_W_VALUE + 1, 0, 0);
+			input_set_abs_params(this->input, ABS_MT_ORIENTATION, -1, 1, 0, 0);
 			input_set_abs_params(this->input, ABS_MT_TOOL_TYPE,
 					MT_TOOL_FINGER, MT_TOOL_FINGER, 0, 0);
 
@@ -2266,13 +2258,13 @@ static void synaptics_funcarea_down(struct synaptics_clearpad *this,
 		input_mt_report_slot_state(idev, cur->tool, true);
 		input_report_abs(idev, ABS_MT_POSITION_X, cur->x);
 		input_report_abs(idev, ABS_MT_POSITION_Y, cur->y);
-		if (this->touch_pressure_enabled)
+		if (likely(this->touch_pressure_enabled))
 			input_report_abs(idev, ABS_MT_PRESSURE, cur->z);
-		if (this->touch_size_enabled) {
+		if (unlikely(this->touch_size_enabled)) {
 			input_report_abs(idev, ABS_MT_TOUCH_MAJOR, touch_major);
 			input_report_abs(idev, ABS_MT_TOUCH_MINOR, touch_minor);
 		}
-		if (this->touch_orientation_enabled)
+		if (unlikely(this->touch_orientation_enabled))
 			input_report_abs(idev, ABS_MT_ORIENTATION,
 				 (cur->wx > cur->wy));
 		break;
@@ -4249,6 +4241,40 @@ static ssize_t chip_ver_show(struct kobject *kobj, struct kobj_attribute *attr, 
 }
 static struct kobj_attribute chip_ver_interface = __ATTR(chip_ver, 0644, chip_ver_show, NULL);
 
+static ssize_t touch_config_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf,   "size=%u\n", p_this->touch_size_enabled);
+	sprintf(buf, "%spressure=%u\n", buf, p_this->touch_pressure_enabled);
+	sprintf(buf, "%sorientation=%u\n", buf, p_this->touch_orientation_enabled);
+
+	return strlen(buf);
+}
+static ssize_t touch_config_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	u32 val;
+
+	if (sscanf(buf, "size=%u", &val)) {
+		p_this->touch_size_enabled = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "pressure=%u", &val)) {
+		p_this->touch_pressure_enabled = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "orientation=%u", &val)) {
+		p_this->touch_orientation_enabled = val;
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+static struct kobj_attribute touch_config_interface = __ATTR(touch_config, 0644, touch_config_show, touch_config_store);
+
 static ssize_t sweep2wake_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf,   "status: %s\n", s2w_enable ? "on" : "off");
@@ -4464,6 +4490,7 @@ static struct attribute_group clearpad_debug_attr_group = {
 
 static struct attribute *clearpad_attrs[] = {
 	&chip_ver_interface.attr,
+	&touch_config_interface.attr,
 	&sweep2wake_interface.attr,
 	NULL,
 };
