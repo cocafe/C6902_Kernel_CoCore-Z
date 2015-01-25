@@ -490,12 +490,14 @@ static bool s2w_down   = false;
 static bool s2w_led    = true;
 
 static int s2w_color[] = { 
-	12,	/* R */
-	213,	/* G */
-	253,	/* B */
+	249,	/* R */
+	0,	/* G */
+	141,	/* B */
 };
 
-static int s2w_check_color(void)
+static int last_led[3] = { 0 };
+
+static int s2w_same_color(void)
 {
 	if (qpnp_led_rgb_get(COLOR_RED) != s2w_color[0])
 		return 0;
@@ -506,7 +508,6 @@ static int s2w_check_color(void)
 	if (qpnp_led_rgb_get(COLOR_BLUE) != s2w_color[2])
 		return 0;
 
-	/* Same color */
 	return 1;
 }
 
@@ -516,10 +517,13 @@ static void s2w_set_led(int enable)
 		qpnp_led_rgb_set(COLOR_RED,   s2w_color[0]);
 		qpnp_led_rgb_set(COLOR_GREEN, s2w_color[1]);
 		qpnp_led_rgb_set(COLOR_BLUE,  s2w_color[2]);
-	} else if (s2w_check_color()){
-		qpnp_led_rgb_set(COLOR_RED,   0);
-		qpnp_led_rgb_set(COLOR_GREEN, 0);
-		qpnp_led_rgb_set(COLOR_BLUE,  0);
+	} else if (s2w_same_color()) {
+		/*
+		 * LED has not been changed by other stuff, revert the state
+		 */
+		qpnp_led_rgb_set(COLOR_RED,   last_led[0]);
+		qpnp_led_rgb_set(COLOR_GREEN, last_led[1]);
+		qpnp_led_rgb_set(COLOR_BLUE,  last_led[2]);
 	}
 }
 
@@ -3663,6 +3667,10 @@ static void synaptics_notify_suspend(struct work_struct *work)
 
 	if (s2w_enable) {
 		if (s2w_led) {
+			last_led[0] = qpnp_led_rgb_get(COLOR_RED);
+			last_led[1] = qpnp_led_rgb_get(COLOR_GREEN);
+			last_led[2] = qpnp_led_rgb_get(COLOR_BLUE);
+
 			s2w_set_led(1);
 		}
 	}
