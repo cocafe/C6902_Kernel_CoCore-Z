@@ -494,6 +494,20 @@ static int cpufreq_parse_dt(struct device *dev)
 	return 0;
 }
 
+int is_cpufreq_used(u32 kHz)
+{
+	u32 i;
+
+	if (!freq_table)
+		return 0;
+
+	for (i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++)
+		if (kHz == freq_table[i].frequency)
+			return 1;
+
+	return 0;
+}
+
 #ifdef CONFIG_DEBUG_FS
 static int msm_cpufreq_show(struct seq_file *m, void *unused)
 {

@@ -21,6 +21,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/of.h>
 #include <linux/cpumask.h>
+#include <linux/kobject.h>
 
 #include <asm/cputype.h>
 
@@ -812,6 +813,225 @@ static void __exit clock_krait_8974_exit(void)
 	platform_driver_unregister(&clock_krait_8974_driver);
 }
 module_exit(clock_krait_8974_exit);
+
+/*
+ * arch/arm/mach-msm/krait-regulator.c
+ *
+ * #define PMIC_VOLTAGE_MIN		350000
+ * #define PMIC_VOLTAGE_MAX		1355000
+ * #define LV_RANGE_STEP		5000
+ *
+ */
+
+#define VDD_MIN		350000
+#define VDD_MAX		1355000
+#define VDD_STEP	5000
+
+extern int is_cpufreq_used(unsigned long cpu_freq);
+
+static ssize_t krait_cur_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
+	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
+	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
+	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+
+	sprintf(buf, "CPU      kHz       uV       uA\n");
+	sprintf(buf, "%s%3u%9u%9u%9u\n",
+				buf,
+				0,
+				(u32)(krait0_clk.c.fmax[vdd0->cur_level] / 1000),
+				vdd0->vdd_uv[vdd0->cur_level],
+				vdd0->vdd_ua[vdd0->cur_level]);
+	sprintf(buf, "%s%3u%9u%9u%9u\n",
+				buf,
+				1,
+				(u32)(krait1_clk.c.fmax[vdd1->cur_level] / 1000),
+				vdd1->vdd_uv[vdd1->cur_level],
+				vdd1->vdd_ua[vdd1->cur_level]);
+	sprintf(buf, "%s%3u%9u%9u%9u\n",
+				buf,
+				2,
+				(u32)(krait2_clk.c.fmax[vdd2->cur_level] / 1000),
+				vdd2->vdd_uv[vdd2->cur_level],
+				vdd2->vdd_ua[vdd2->cur_level]);
+	sprintf(buf, "%s%3u%9u%9u%9u\n",
+				buf,
+				3,
+				(u32)(krait3_clk.c.fmax[vdd3->cur_level] / 1000),
+				vdd3->vdd_uv[vdd3->cur_level],
+				vdd3->vdd_ua[vdd3->cur_level]);
+
+	return strlen(buf);
+}
+static struct kobj_attribute krait_cur_interface = __ATTR(krait_cur, 0444, krait_cur_show, NULL);
+
+static ssize_t krait_uV_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct clk_vdd_class *vdd = krait0_clk.c.vdd_class;
+	int i;
+	int nums = vdd->num_levels;
+
+	sprintf(buf, "Idx      kHz       uV  Used\n");
+
+	for (i = 1; i < nums; i++) {
+		sprintf(buf, "%s%3d%9u%9u   (%c)\n",
+				buf,
+				i,
+				(u32)(krait0_clk.c.fmax[i] / 1000),
+				vdd->vdd_uv[i],
+				is_cpufreq_used(krait0_clk.c.fmax[i] / 1000) ? 'X' : ' ');
+	}
+
+	return strlen(buf);
+}
+
+static ssize_t krait_uV_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
+	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
+	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
+	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+
+	u32 i, val, nums = vdd0->num_levels;
+
+	if (sscanf(buf, "-%uuV", &val)) {
+		if (val % VDD_STEP)
+			return -EINVAL;
+
+		pr_info("krait-8974: -%u uV\n", val);
+
+		for (i = 1; i < nums; i++) {
+			if ((vdd0->vdd_uv[i] - val) < VDD_MIN)
+				continue;
+
+			vdd0->vdd_uv[i] -= val / 4;
+			vdd1->vdd_uv[i] -= val / 4;
+			vdd2->vdd_uv[i] -= val / 4;
+			vdd3->vdd_uv[i] -= val / 4;
+		}
+
+		return count;
+	}
+
+	if (sscanf(buf, "+%uuV", &val)) {
+		if (val % VDD_STEP)
+			return -EINVAL;
+
+		pr_info("krait-8974: +%u uV\n", val);
+
+		for (i = 1; i < nums; i++) {
+			if ((vdd0->vdd_uv[i] + val) > VDD_MAX)
+				continue;
+
+			vdd0->vdd_uv[i] += val / 4;
+			vdd1->vdd_uv[i] += val / 4;
+			vdd2->vdd_uv[i] += val / 4;
+			vdd3->vdd_uv[i] += val / 4;
+		}
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+static struct kobj_attribute krait_uV_interface = __ATTR(krait_uV, 0644, krait_uV_show, krait_uV_store);
+
+static ssize_t krait_uA_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct clk_vdd_class *vdd = krait0_clk.c.vdd_class;
+	int i;
+	int nums = vdd->num_levels;
+
+	sprintf(buf, "Idx      kHz   uA  Used\n");
+
+	for (i = 1; i < nums; i++) {
+		sprintf(buf, "%s%3d%9u%5u   (%c)\n",
+				buf,
+				i,
+				(u32)(krait0_clk.c.fmax[i] / 1000),
+				vdd->vdd_ua[i],
+				is_cpufreq_used(krait0_clk.c.fmax[i] / 1000) ? 'X' : ' ');
+	}
+
+	return strlen(buf);
+}
+
+static ssize_t krait_uA_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
+	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
+	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
+	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+
+	u32 i, val, nums = vdd0->num_levels;
+
+	if (sscanf(buf, "-%uuA", &val)) {
+		if (val % 4)
+			return -EINVAL;
+
+		pr_info("krait-8974: -%u uA\n", val);
+
+		for (i = 1; i < nums; i++) {
+			vdd0->vdd_ua[i] -= val / 4;
+			vdd1->vdd_ua[i] -= val / 4;
+			vdd2->vdd_ua[i] -= val / 4;
+			vdd3->vdd_ua[i] -= val / 4;
+		}
+
+		return count;
+	}
+
+	if (sysfs_streq(buf, "+%uuA")) {
+		if (val % 4)
+			return -EINVAL;
+
+		pr_info("krait-8974: +%u uA\n", val);
+
+		for (i = 1; i < nums; i++) {
+			vdd0->vdd_ua[i] += val / 4;
+			vdd1->vdd_ua[i] += val / 4;
+			vdd2->vdd_ua[i] += val / 4;
+			vdd3->vdd_ua[i] += val / 4;
+		}
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+static struct kobj_attribute krait_uA_interface = __ATTR(krait_uA, 0644, krait_uA_show, krait_uA_store);
+
+static struct attribute *krait_kobj_attrs[] = {
+	&krait_cur_interface.attr,
+	&krait_uV_interface.attr,
+	&krait_uA_interface.attr,
+	NULL,
+};
+
+static struct attribute_group krait_kobj_interface_group = {
+	.attrs = krait_kobj_attrs,
+};
+
+static struct kobject *krait_kobj_kobject;
+
+static int __init krait_kobj_sysfs_init(void)
+{
+	int ret;
+
+	krait_kobj_kobject = kobject_create_and_add("krait-8974", kernel_kobj);
+	if (!krait_kobj_kobject) {
+		pr_err("krait_kobj: Failed to create kobject interface\n");
+	}
+	ret = sysfs_create_group(krait_kobj_kobject, &krait_kobj_interface_group);
+	if (ret) {
+		kobject_put(krait_kobj_kobject);
+	}
+
+        return 0;
+}
+
+late_initcall(krait_kobj_sysfs_init);
 
 MODULE_DESCRIPTION("Krait CPU clock driver for 8974");
 MODULE_LICENSE("GPL v2");
