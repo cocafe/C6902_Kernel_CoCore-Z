@@ -23,6 +23,11 @@
 #include <linux/cpumask.h>
 #include <linux/kobject.h>
 
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
+
 #include <asm/cputype.h>
 
 #include <mach/rpm-regulator-smd.h>
@@ -817,17 +822,151 @@ module_exit(clock_krait_8974_exit);
 /*
  * arch/arm/mach-msm/krait-regulator.c
  *
- * #define PMIC_VOLTAGE_MIN		350000
- * #define PMIC_VOLTAGE_MAX		1355000
- * #define LV_RANGE_STEP		5000
+ * #define PMIC_VOLTAGE_MIN			350000
+ * #define PMIC_VOLTAGE_MAX			1355000
+ * #define LV_RANGE_STEP			5000
+ * 
+ * #define CORE_VOLTAGE_BOOTUP			900000
+ * 
+ * #define KRAIT_LDO_VOLTAGE_MIN		465000
+ * #define KRAIT_LDO_VOLTAGE_OFFSET		465000
+ * #define KRAIT_LDO_STEP			5000
  *
  */
 
+/* in uV */
+#define VDD_5MV		5000
+#define VDD_10MV	10000
+#define VDD_15MV	15000
+#define VDD_20MV	20000
+#define VDD_25MV	25000
+
 #define VDD_MIN		350000
 #define VDD_MAX		1355000
-#define VDD_STEP	5000
+#define VDD_STEP	VDD_5MV
 
 extern int is_cpufreq_used(unsigned long cpu_freq);
+
+enum uvua {
+	uv = 0,
+	ua = 1
+};
+
+/* 
+ * in uV and uA
+ */
+static int krait_update_uvua(enum uvua type, int change)
+{
+	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
+	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
+	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
+	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+
+	u32 i, nums = vdd0->num_levels;
+
+	switch (type) {
+		case uv:
+			if (abs(change) % VDD_STEP) {
+				return -EINVAL;
+			}
+
+			for (i = 1; i < nums; i++) {
+				if ((vdd0->vdd_uv[i] + change) > VDD_MAX)
+					continue;
+
+				vdd0->vdd_uv[i] += change / 4;
+				vdd1->vdd_uv[i] += change / 4;
+				vdd2->vdd_uv[i] += change / 4;
+				vdd3->vdd_uv[i] += change / 4;
+			}
+
+			break;
+
+		case ua:
+			if (abs(change) % 4)
+				return -EINVAL;
+
+			for (i = 1; i < nums; i++) {
+				vdd0->vdd_ua[i] += change / 4;
+				vdd1->vdd_ua[i] += change / 4;
+				vdd2->vdd_ua[i] += change / 4;
+				vdd3->vdd_ua[i] += change / 4;
+			}
+
+			break;
+	}
+
+	return 0;
+}
+
+#ifdef CONFIG_FB
+static struct notifier_block fb_notif;
+static struct work_struct fb_notify_resume;
+static struct work_struct fb_notify_suspend;
+
+static u32 krait_sleep_lp = 0;
+static u32 krait_is_blank = 0;
+static u32 krait_sleep_uv_reduce = 20;
+static u32 krait_sleep_ua_reduce = 0;
+#endif
+
+#ifdef CONFIG_FB
+static void krait_vdd_fb_notify_resume(struct work_struct *work)
+{
+	krait_is_blank = 0;
+
+	if (krait_sleep_lp) {
+		if (krait_sleep_uv_reduce) {
+			pr_info("krait-8974: Applied +%umV for sleep\n", krait_sleep_uv_reduce);
+			krait_update_uvua(uv, krait_sleep_uv_reduce * 1000);
+		}
+
+		if (krait_sleep_ua_reduce) {
+			pr_info("krait-8974: Applied +%uuA for sleep\n", krait_sleep_ua_reduce);
+			krait_update_uvua(ua, krait_sleep_ua_reduce);
+		}
+	}
+}
+
+static void krait_vdd_fb_notify_suspend(struct work_struct *work)
+{
+	krait_is_blank = 1;
+
+	if (krait_sleep_lp) {
+		if (krait_sleep_uv_reduce) {
+			pr_info("krait-8974: Applied -%umV for sleep\n", krait_sleep_uv_reduce);
+			krait_update_uvua(uv, krait_sleep_uv_reduce * -1000);
+		}
+
+		if (krait_sleep_ua_reduce) {
+			pr_info("krait-8974: Applied -%uuA for sleep\n", krait_sleep_ua_reduce);
+			krait_update_uvua(ua, krait_sleep_ua_reduce * -1);
+		}
+	}
+}
+
+static int krait_vdd_fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK) {
+		blank = evdata->data;
+		if (*blank == FB_BLANK_UNBLANK) {
+			cancel_work_sync(&fb_notify_suspend);
+			cancel_work_sync(&fb_notify_resume);
+			schedule_work(&fb_notify_resume);
+		} else if (*blank == FB_BLANK_POWERDOWN) {
+			cancel_work_sync(&fb_notify_resume);
+			cancel_work_sync(&fb_notify_suspend);
+			schedule_work(&fb_notify_suspend);
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static ssize_t krait_cur_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -836,26 +975,26 @@ static ssize_t krait_cur_show(struct kobject *kobj, struct kobj_attribute *attr,
 	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
 	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
 
-	sprintf(buf, "CPU      kHz       uV       uA\n");
-	sprintf(buf, "%s%3u%9u%9u%9u\n",
+	sprintf(buf, "CPU      kHz       uV   uA\n");
+	sprintf(buf, "%s%3u%9u%9u%5u\n",
 				buf,
 				0,
 				(u32)(krait0_clk.c.fmax[vdd0->cur_level] / 1000),
 				vdd0->vdd_uv[vdd0->cur_level],
 				vdd0->vdd_ua[vdd0->cur_level]);
-	sprintf(buf, "%s%3u%9u%9u%9u\n",
+	sprintf(buf, "%s%3u%9u%9u%5u\n",
 				buf,
 				1,
 				(u32)(krait1_clk.c.fmax[vdd1->cur_level] / 1000),
 				vdd1->vdd_uv[vdd1->cur_level],
 				vdd1->vdd_ua[vdd1->cur_level]);
-	sprintf(buf, "%s%3u%9u%9u%9u\n",
+	sprintf(buf, "%s%3u%9u%9u%5u\n",
 				buf,
 				2,
 				(u32)(krait2_clk.c.fmax[vdd2->cur_level] / 1000),
 				vdd2->vdd_uv[vdd2->cur_level],
 				vdd2->vdd_ua[vdd2->cur_level]);
-	sprintf(buf, "%s%3u%9u%9u%9u\n",
+	sprintf(buf, "%s%3u%9u%9u%5u\n",
 				buf,
 				3,
 				(u32)(krait3_clk.c.fmax[vdd3->cur_level] / 1000),
@@ -888,49 +1027,34 @@ static ssize_t krait_uV_show(struct kobject *kobj, struct kobj_attribute *attr, 
 
 static ssize_t krait_uV_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
-	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
-	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
-	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+	u32 val, ret;
 
-	u32 i, val, nums = vdd0->num_levels;
-
-	if (sscanf(buf, "-%uuV", &val)) {
-		if (val % VDD_STEP)
+	if (sscanf(buf, "-%umV", &val)) {
+		if (!val)
 			return -EINVAL;
 
-		pr_info("krait-8974: -%u uV\n", val);
+		pr_info("krait-8974: -%u mV\n", val);
 
-		for (i = 1; i < nums; i++) {
-			if ((vdd0->vdd_uv[i] - val) < VDD_MIN)
-				continue;
+		ret = krait_update_uvua(uv, val * -1000);
 
-			vdd0->vdd_uv[i] -= val / 4;
-			vdd1->vdd_uv[i] -= val / 4;
-			vdd2->vdd_uv[i] -= val / 4;
-			vdd3->vdd_uv[i] -= val / 4;
-		}
-
-		return count;
+		if (ret)
+			return ret;
+		else
+			return count;
 	}
 
-	if (sscanf(buf, "+%uuV", &val)) {
-		if (val % VDD_STEP)
+	if (sscanf(buf, "+%umV", &val)) {
+		if (!val)
 			return -EINVAL;
 
-		pr_info("krait-8974: +%u uV\n", val);
+		pr_info("krait-8974: +%u mV\n", val);
 
-		for (i = 1; i < nums; i++) {
-			if ((vdd0->vdd_uv[i] + val) > VDD_MAX)
-				continue;
+		ret = krait_update_uvua(uv, val * 1000);
 
-			vdd0->vdd_uv[i] += val / 4;
-			vdd1->vdd_uv[i] += val / 4;
-			vdd2->vdd_uv[i] += val / 4;
-			vdd3->vdd_uv[i] += val / 4;
-		}
-
-		return count;
+		if (ret)
+			return ret;
+		else
+			return count;
 	}
 
 	return -EINVAL;
@@ -959,53 +1083,121 @@ static ssize_t krait_uA_show(struct kobject *kobj, struct kobj_attribute *attr, 
 
 static ssize_t krait_uA_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
-	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
-	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
-	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
-
-	u32 i, val, nums = vdd0->num_levels;
+	u32 val, ret;
 
 	if (sscanf(buf, "-%uuA", &val)) {
-		if (val % 4)
+		if (!val)
 			return -EINVAL;
 
 		pr_info("krait-8974: -%u uA\n", val);
 
-		for (i = 1; i < nums; i++) {
-			vdd0->vdd_ua[i] -= val / 4;
-			vdd1->vdd_ua[i] -= val / 4;
-			vdd2->vdd_ua[i] -= val / 4;
-			vdd3->vdd_ua[i] -= val / 4;
-		}
+		ret = krait_update_uvua(ua, val * -1);
 
-		return count;
+		if (ret)
+			return ret;
+		else
+			return count;
 	}
 
-	if (sysfs_streq(buf, "+%uuA")) {
-		if (val % 4)
+	if (sscanf(buf, "+%uuA", &val)) {
+		if (!val)
 			return -EINVAL;
 
 		pr_info("krait-8974: +%u uA\n", val);
 
-		for (i = 1; i < nums; i++) {
-			vdd0->vdd_ua[i] += val / 4;
-			vdd1->vdd_ua[i] += val / 4;
-			vdd2->vdd_ua[i] += val / 4;
-			vdd3->vdd_ua[i] += val / 4;
-		}
+		ret = krait_update_uvua(ua, val);
 
-		return count;
+		if (ret)
+			return ret;
+		else
+			return count;
 	}
 
 	return -EINVAL;
 }
 static struct kobj_attribute krait_uA_interface = __ATTR(krait_uA, 0644, krait_uA_show, krait_uA_store);
 
+static ssize_t krait_table_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct clk_vdd_class *vdd = krait0_clk.c.vdd_class;
+	int i;
+	int nums = vdd->num_levels;
+
+	sprintf(buf, "Idx      kHz       uV    uA  Used\n");
+
+	for (i = 1; i < nums; i++) {
+		sprintf(buf, "%s%3d%9u%9u%6u   (%c)\n",
+				buf,
+				i,
+				(u32)(krait0_clk.c.fmax[i] / 1000),
+				vdd->vdd_uv[i],
+				vdd->vdd_ua[i],
+				is_cpufreq_used(krait0_clk.c.fmax[i] / 1000) ? 'X' : ' ');
+	}
+
+	return strlen(buf);
+}
+static struct kobj_attribute krait_table_interface = __ATTR(krait_table, 0644, krait_table_show, NULL);
+
+static ssize_t krait_lps_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%sLow Power Sleep: %s\n", buf, krait_sleep_lp ? "on" : "off");
+	sprintf(buf, "%sVoltage Decrasement: %u mV\n", buf, krait_sleep_uv_reduce);
+	sprintf(buf, "%sCurrent Decrasement: %u uA\n", buf, krait_sleep_ua_reduce);
+
+	return strlen(buf);
+}
+
+static ssize_t krait_lps_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	u32 val;
+
+	if (sysfs_streq(buf, "on")) {
+		if (!krait_is_blank) {
+			krait_sleep_lp = 1;
+
+			return count;
+		}
+	}
+
+	if (sysfs_streq(buf, "off")) {
+		if (!krait_is_blank) {
+			krait_sleep_lp = 1;
+
+			return count;
+		}
+	}
+
+	if (sscanf(buf, "mV=%u", &val)) {
+		if (!krait_is_blank) {
+			if ((val >= 0) && !(val % 5)) {
+				krait_sleep_uv_reduce = val;
+
+				return count;
+			}
+		}
+	}
+
+	if (sscanf(buf, "uA=%u", &val)) {
+		if (!krait_is_blank) {
+			if ((val >= 0) && !(val % 4)) {
+				krait_sleep_ua_reduce = val;
+
+				return count;
+			}
+		}
+	}
+
+	return -EINVAL;
+}
+static struct kobj_attribute krait_lps_interface = __ATTR(krait_lps, 0644, krait_lps_show, krait_lps_store);
+
 static struct attribute *krait_kobj_attrs[] = {
 	&krait_cur_interface.attr,
 	&krait_uV_interface.attr,
 	&krait_uA_interface.attr,
+	&krait_table_interface.attr,
+	&krait_lps_interface.attr,
 	NULL,
 };
 
@@ -1019,7 +1211,7 @@ static int __init krait_kobj_sysfs_init(void)
 {
 	int ret;
 
-	krait_kobj_kobject = kobject_create_and_add("krait-8974", kernel_kobj);
+	krait_kobj_kobject = kobject_create_and_add("krait-vdd", kernel_kobj);
 	if (!krait_kobj_kobject) {
 		pr_err("krait_kobj: Failed to create kobject interface\n");
 	}
@@ -1027,6 +1219,17 @@ static int __init krait_kobj_sysfs_init(void)
 	if (ret) {
 		kobject_put(krait_kobj_kobject);
 	}
+
+#ifdef CONFIG_FB
+	fb_notif.notifier_call = krait_vdd_fb_notifier_callback;
+	ret = fb_register_client(&fb_notif);
+	if (ret) {
+		pr_info("krait_vdd: Unable to register fb_notifier\n");
+	} else {
+		INIT_WORK(&fb_notify_resume, krait_vdd_fb_notify_resume);
+		INIT_WORK(&fb_notify_suspend, krait_vdd_fb_notify_suspend);
+	}
+#endif
 
         return 0;
 }
