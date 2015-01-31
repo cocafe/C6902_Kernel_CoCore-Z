@@ -1028,7 +1028,7 @@ static ssize_t krait_uV_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	int i;
 	int nums = vdd->num_levels;
 
-	sprintf(buf, "Idx      kHz       uV  Used\n");
+	sprintf(buf, "         kHz       uV  Used\n");
 
 	for (i = 1; i < nums; i++) {
 		sprintf(buf, "%s%3d%9u%9u   (%c)\n",
@@ -1084,7 +1084,7 @@ static ssize_t krait_uA_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	int i;
 	int nums = vdd->num_levels;
 
-	sprintf(buf, "Idx      kHz   uA  Used\n");
+	sprintf(buf, "         kHz   uA  Used\n");
 
 	for (i = 1; i < nums; i++) {
 		sprintf(buf, "%s%3d%9u%5u   (%c)\n",
@@ -1140,7 +1140,8 @@ static ssize_t krait_table_show(struct kobject *kobj, struct kobj_attribute *att
 	int i;
 	int nums = vdd->num_levels;
 
-	sprintf(buf, "Idx      kHz       uV    uA  Used\n");
+	sprintf(buf,   "[%s]\n\n", table_name);
+	sprintf(buf, "%s         kHz       uV    uA  Used\n", buf);
 
 	for (i = 1; i < nums; i++) {
 		sprintf(buf, "%s%3d%9u%9u%6u   (%c)\n",
@@ -1228,7 +1229,7 @@ static int __init krait_kobj_sysfs_init(void)
 {
 	int ret;
 
-	krait_kobj_kobject = kobject_create_and_add("krait-vdd", kernel_kobj);
+	krait_kobj_kobject = kobject_create_and_add("krait_vdd", kernel_kobj);
 	if (!krait_kobj_kobject) {
 		pr_err("krait_kobj: Failed to create kobject interface\n");
 	}
