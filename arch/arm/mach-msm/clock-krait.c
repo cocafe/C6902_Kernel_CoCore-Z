@@ -89,8 +89,9 @@ struct clk_mux_ops clk_mux_ops_kpss = {
 };
 
 /*
- * The divider can divide by 2, 4, 6 and 8. But we only really need div-2. So
- * force it to div-2 during handoff and treat it like a fixed div-2 clock.
+ * XXX:
+ *	The divider can divide by 2, 4, 6 and 8. But we only really need div-2. So
+ * 	force it to div-2 during handoff and treat it like a fixed div-2 clock.
  */
 static int kpss_div2_get_div(struct div_clk *div)
 {
@@ -111,7 +112,7 @@ static int kpss_div2_get_div(struct div_clk *div)
 	WARN(val != 2, "Divider %s was configured to div-%d instead of 2!\n",
 		div->c.dbg_name, val);
 
-	return 2;
+	return val;
 }
 
 struct clk_div_ops clk_div_ops_kpss_div2 = {
