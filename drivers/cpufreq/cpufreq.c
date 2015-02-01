@@ -28,6 +28,7 @@
 #include <linux/cpu.h>
 #include <linux/completion.h>
 #include <linux/mutex.h>
+#include <linux/sched.h>
 #include <linux/syscore_ops.h>
 
 #include <trace/events/power.h>
@@ -432,14 +433,13 @@ static ssize_t store_scaling_min_freq
 	if (ret)
 		return -EINVAL;
 
+	pr_info("%s: proc: %s buf: %s\n", __func__, current->comm, buf);
+
 	ret = sscanf(buf, "%u", &new_policy.min);
 	if (ret != 1)
 		return -EINVAL;
 
-	/*
-	 * HACK: To avoid system stuff setting 300MHz as minimum
-	 */
-	if (!is_cpufreq_used(new_policy.min))
+	if (sysfs_streq(current->comm, "mpdecision"))
 		return -EINVAL;
 
 	ret = cpufreq_driver->verify(&new_policy);
@@ -461,6 +461,8 @@ static ssize_t store_scaling_max_freq
 	ret = cpufreq_get_policy(&new_policy, policy->cpu);
 	if (ret)
 		return -EINVAL;
+
+	pr_info("%s: proc: %s buf: %s\n", __func__, current->comm, buf);
 
 	ret = sscanf(buf, "%u", &new_policy.max);
 	if (ret != 1)
