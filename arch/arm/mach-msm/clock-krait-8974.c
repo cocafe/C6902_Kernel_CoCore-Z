@@ -37,25 +37,9 @@
 #include "clock-krait.h"
 #include "clock.h"
 
-/*
- * cocafe:
- *
- * There are two PLLs that krait clock subsystem uses:
- *
- *      HFPLL (hfpll_clk, hfpll_div_clk)
- *      GPLL0 (acpu_aux_clk)
- *
- * Originally, the divider of apu_aux_clk is 2, namely:
- *
- *      300MHz(acpu) = 600MHz(GPLL0) / 2(divider)
- *
- * krait0_sec_mux_clk, krait0_pri_mux_clk perform the switches.
- *
- */
-
 /* Clock inputs coming into Krait subsystem */
 DEFINE_FIXED_DIV_CLK(hfpll_src_clk, 1, NULL);
-DEFINE_FIXED_DIV_CLK(acpu_aux_clk, 6, NULL);
+DEFINE_FIXED_DIV_CLK(acpu_aux_clk, 2, NULL);
 
 static int hfpll_uv[] = {
 	RPM_REGULATOR_CORNER_NONE, 0,
