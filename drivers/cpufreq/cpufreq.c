@@ -433,7 +433,7 @@ static ssize_t store_scaling_min_freq
 	if (ret)
 		return -EINVAL;
 
-	pr_info("%s: proc: %s buf: %s\n", __func__, current->comm, buf);
+	pr_info("%s: CPU%u proc: %s %s", __func__, policy->cpu, current->comm, buf);
 
 	ret = sscanf(buf, "%u", &new_policy.min);
 	if (ret != 1)
@@ -462,7 +462,7 @@ static ssize_t store_scaling_max_freq
 	if (ret)
 		return -EINVAL;
 
-	pr_info("%s: proc: %s buf: %s\n", __func__, current->comm, buf);
+	pr_info("%s: CPU%u proc: %s %s", __func__, policy->cpu, current->comm, buf);
 
 	ret = sscanf(buf, "%u", &new_policy.max);
 	if (ret != 1)
