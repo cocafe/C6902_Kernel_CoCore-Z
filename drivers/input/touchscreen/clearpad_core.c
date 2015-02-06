@@ -1719,8 +1719,7 @@ static int clearpad_vreg_suspend(struct synaptics_clearpad *this,
 
 	if (IS_ERR(this->vreg_touch_vdd)) {
 		dev_err(&this->pdev->dev,
-				"%s: vreg_touch_vdd is not initialized\n",
-				__func__);
+				"vreg_touch_vdd is not initialized\n");
 		rc = -ENODEV;
 		goto exit;
 	}
@@ -1732,13 +1731,13 @@ static int clearpad_vreg_suspend(struct synaptics_clearpad *this,
 
 	if (rc < 0) {
 		dev_err(&this->pdev->dev,
-				"%s: vdd: set mode (%s) failed, rc=%d\n",
-				__func__, (enable ? "LPM" : "HPM"), rc);
+				"vdd: set mode (%s) failed, rc=%d\n",
+				(enable ? "LPM" : "HPM"), rc);
 		goto exit;
 	} else {
 		dev_info(&this->pdev->dev,
-				"%s: vdd: set mode (%s) ok, new mode=%d\n",
-				__func__, (enable ? "LPM" : "HPM"), rc);
+				"vdd: set mode (%s) ok, new mode=%d\n",
+				(enable ? "LPM" : "HPM"), rc);
 		rc = 0;
 	}
 exit:
@@ -1946,8 +1945,7 @@ static int synaptics_clearpad_set_power(struct synaptics_clearpad *this)
 		 this->input->users + this->input_pen->users,
 		 !!(active & SYN_STANDBY));
 
-	dev_info(&this->pdev->dev, "%s: state=%s\n", __func__,
-		 state_name[this->state]);
+	dev_info(&this->pdev->dev, "state=%s\n", state_name[this->state]);
 	should_wake = !(active & SYN_STANDBY);
 
 	if (should_wake && !(active & SYN_ACTIVE_POWER))

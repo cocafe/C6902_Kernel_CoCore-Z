@@ -355,10 +355,12 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	unsigned int type = button->type ?: EV_KEY;
 	int state = (gpio_get_value_cansleep(button->gpio) ? 1 : 0) ^ button->active_low;
 
+	/*
 	pr_info("gpio-keys: code: %d value: %d state: %d",
 					button->code,
 					button->value,
 					state);
+	 */
 
 	if (type == EV_ABS) {
 		if (state)
