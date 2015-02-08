@@ -57,8 +57,8 @@
 
 #define IS_IO_BUSY				(1)
 
-#define UP_THRESHOLD_AT_MIN_FREQ		(60)
-#define FREQ_FOR_RESPONSIVENESS			(729600)
+#define UP_THRESHOLD_AT_MIN_FREQ		(55)
+#define FREQ_FOR_RESPONSIVENESS			(960000)
 
 static unsigned int min_sampling_rate;
 
