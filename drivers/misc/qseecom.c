@@ -902,8 +902,8 @@ static int qseecom_load_app(struct qseecom_dev_handle *data, void __user *argp)
 		spin_unlock_irqrestore(
 		&qseecom.registered_app_list_lock, flags);
 	} else {
-		pr_warn("App (%s) does'nt exist, loading apps for first time\n",
-			(char *)(load_img_req.img_name));
+//		pr_warn("App (%s) does'nt exist, loading apps for first time\n",
+//			(char *)(load_img_req.img_name));
 		/* Get the handle of the shared fd */
 		ihandle = ion_import_dma_buf(qseecom.ion_clnt,
 					load_img_req.ifd_data_fd);
@@ -992,8 +992,8 @@ static int qseecom_load_app(struct qseecom_dev_handle *data, void __user *argp)
 		spin_unlock_irqrestore(&qseecom.registered_app_list_lock,
 									flags);
 
-		pr_warn("App with id %d (%s) now loaded\n", app_id,
-		(char *)(load_img_req.img_name));
+//		pr_warn("App with id %d (%s) now loaded\n", app_id,
+//		(char *)(load_img_req.img_name));
 	}
 	data->client.app_id = app_id;
 	load_img_req.app_id = app_id;
@@ -1097,7 +1097,7 @@ static int qseecom_unload_app(struct qseecom_dev_handle *data)
 							req.app_id);
 			return -EFAULT;
 		} else {
-			pr_warn("App id %d now unloaded\n", req.app_id);
+//			pr_warn("App id %d now unloaded\n", req.app_id);
 		}
 		if (resp.result == QSEOS_RESULT_INCOMPLETE) {
 			ret = __qseecom_process_incomplete_cmd(data, &resp);
