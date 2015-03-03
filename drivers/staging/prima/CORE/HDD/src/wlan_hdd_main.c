@@ -5465,6 +5465,68 @@ static boolean hdd_is_5g_supported(hdd_context_t * pHddCtx)
    }
 }
 
+#define MAC_PATH 		"wlan/prima/WLAN_MAC"
+#define MAC_SIZE 		(17)
+
+const struct firmware *wlan_mac;
+
+static int wlan_parse_custom_mac_addr
+				(hdd_context_t *pHddCtx, const u8 *fw, size_t size)
+{
+	unsigned int bytes[6] = { 0x00 };
+	char buf[MAC_SIZE + 1];
+	int i;
+
+	if (size < MAC_SIZE)
+		return 1;
+
+	memcpy(buf, fw, MAC_SIZE);
+	buf[MAC_SIZE] = '\0';
+
+	if (sscanf(buf, "%x:%x:%x:%x:%x:%x",
+						&bytes[0],
+						&bytes[1],
+						&bytes[2],
+						&bytes[3],
+						&bytes[4],
+						&bytes[5]) == 6)
+	{
+		for (i = 0; i < 6; i++)
+			if (bytes[i] > 0xff || bytes[i] < 0x00)
+				return 1;
+
+		pr_info("%s: %s\n", __func__, buf);
+
+		/* FIXME: intfMacAddr[idx] */
+		for (i = 0; i < 6; i++)
+			pHddCtx->cfg_ini->intfMacAddr[0].bytes[i] = bytes[i];
+
+		return 0;
+	}
+
+	return 1;
+}
+
+static int wlan_download_custom_mac_addr(hdd_context_t *pHddCtx)
+{
+	int ret;
+
+	if (request_firmware(&wlan_mac, MAC_PATH, pHddCtx->parent_dev) != 0) {
+		pr_info("%s: Download FW failed\n", __func__);
+		return 1;
+	}
+
+	ret = wlan_parse_custom_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
+	if (ret)
+		pr_info("%s: Parsing MAC address failed, invailed address\n", __func__);
+	else
+		pr_info("%s: Succeeded, using custom MAC address\n", __func__);
+
+	release_firmware(wlan_mac);
+
+	return ret;
+}
+
 
 /**---------------------------------------------------------------------------
   \brief hdd_generate_iface_mac_addr_auto() - HDD Mac Interface Auto
@@ -5490,6 +5552,8 @@ static int hdd_generate_iface_mac_addr_auto(hdd_context_t *pHddCtx,
 
    if (0 != serialno)
    {
+      pr_info("%s: Generating MAC address\n", __func__);
+
       /* MAC address has 3 bytes of OUI so we have a maximum of 3
          bytes of the serial number that can be used to generate
          the other 3 bytes of the MAC address.  Mask off all but
@@ -5537,6 +5601,10 @@ static int hdd_generate_iface_mac_addr_auto(hdd_context_t *pHddCtx,
   \return -  0 for success, < 0 for failure
 
   --------------------------------------------------------------------------*/
+
+#ifdef WLAN_AUTOGEN_MACADDR_FEATURE
+static const v_MACADDR_t default_address = {{0x00, 0x0A, 0xF5, 0x89, 0x89, 0xFF}};
+#endif
 
 int hdd_wlan_startup(struct device *dev )
 {
@@ -5822,9 +5890,6 @@ int hdd_wlan_startup(struct device *dev )
          we'll use them, but if not, we'll autogenerate a set of MAC
          addresses based upon the device serial number */
 
-      static const v_MACADDR_t default_address =
-         {{0x00, 0x0A, 0xF5, 0x89, 0x89, 0xFF}};
-
       if (0 == memcmp(&default_address, &pHddCtx->cfg_ini->intfMacAddr[0],
                    sizeof(default_address)))
       {
@@ -5841,6 +5906,9 @@ int hdd_wlan_startup(struct device *dev )
                    "%s: Failed to generate wlan interface mac addr "
                    "using MAC from ini file " MAC_ADDRESS_STR, __func__,
                    MAC_ADDR_ARRAY(pHddCtx->cfg_ini->intfMacAddr[0].bytes));
+         } else {
+            /* Load custom MAC address, if defined */
+            wlan_download_custom_mac_addr(pHddCtx);
          }
       }
       else
