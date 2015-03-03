@@ -5465,7 +5465,7 @@ static boolean hdd_is_5g_supported(hdd_context_t * pHddCtx)
    }
 }
 
-#define MAC_PATH 		"wlan/prima/WLAN_MAC"
+#define MAC_PATH 		"wlan/macaddr0"
 #define MAC_SIZE 		(17)
 
 const struct firmware *wlan_mac;
@@ -5520,7 +5520,7 @@ static int wlan_download_custom_mac_addr(hdd_context_t *pHddCtx)
 	if (ret)
 		pr_info("%s: Parsing MAC address failed, invailed address\n", __func__);
 	else
-		pr_info("%s: Succeeded, using custom MAC address\n", __func__);
+		pr_info("%s: Succeeded\n", __func__);
 
 	release_firmware(wlan_mac);
 
