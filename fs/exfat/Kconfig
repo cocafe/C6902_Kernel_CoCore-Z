@@ -1,5 +1,0 @@
-config EXFAT_FS
-	tristate "exFat Filesystem"
-	select NLS_UTF8
-	help
-	  Samsung exFat opensource driver
