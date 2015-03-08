@@ -5465,12 +5465,13 @@ static boolean hdd_is_5g_supported(hdd_context_t * pHddCtx)
    }
 }
 
-#define MAC_PATH 		"wlan/macaddr0"
+#define MAC_PATH_DEFAULT 		"wlan/macaddr0"
+#define MAC_PATH_CUSTOM 		"wlan/prima/WLAN_MAC"
 #define MAC_SIZE 		(17)
 
 const struct firmware *wlan_mac;
 
-static int wlan_parse_custom_mac_addr
+static int wlan_parse_fw_mac_addr
 				(hdd_context_t *pHddCtx, const u8 *fw, size_t size)
 {
 	unsigned int bytes[6] = { 0x00 };
@@ -5511,16 +5512,21 @@ static int wlan_download_custom_mac_addr(hdd_context_t *pHddCtx)
 {
 	int ret;
 
-	if (request_firmware(&wlan_mac, MAC_PATH, pHddCtx->parent_dev) != 0) {
-		pr_info("%s: Download FW failed\n", __func__);
+	if (request_firmware(&wlan_mac, MAC_PATH_CUSTOM, pHddCtx->parent_dev) == 0) {
+		pr_info("%s: Custom MAC address firmware found\n", __func__);
+		ret = wlan_parse_fw_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
+	} else if (request_firmware(&wlan_mac, MAC_PATH_DEFAULT, pHddCtx->parent_dev) == 0) {
+		pr_info("%s: Default MAC address firmware found\n", __func__);
+		ret = wlan_parse_fw_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
+	} else {
+		pr_info("%s: MAC address firmware is not found\n", __func__);
 		return 1;
 	}
 
-	ret = wlan_parse_custom_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
 	if (ret)
-		pr_info("%s: Parsing MAC address failed, invailed address\n", __func__);
+		pr_info("%s: Parsing failed, invailed address\n", __func__);
 	else
-		pr_info("%s: Succeeded\n", __func__);
+		pr_info("%s: Parsing succeeded\n", __func__);
 
 	release_firmware(wlan_mac);
 
