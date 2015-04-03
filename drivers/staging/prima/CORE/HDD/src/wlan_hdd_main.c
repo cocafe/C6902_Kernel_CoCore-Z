@@ -381,6 +381,75 @@ static void hdd_vos_trace_enable(VOS_MODULE_ID moduleId, v_U32_t bitmask)
    }
 }
 
+#define MAC_PATH_DEFAULT 		"wlan/macaddr0"
+#define MAC_PATH_CUSTOM 		"wlan/prima/WLAN_MAC"
+#define MAC_SIZE 			(17)
+
+const struct firmware *wlan_mac;
+
+static int wlan_parse_fw_mac_addr
+				(hdd_context_t *pHddCtx, const u8 *fw, size_t size)
+{
+	unsigned int bytes[6] = { 0x00 };
+	char buf[MAC_SIZE + 1];
+	int i;
+	int j;
+
+	if (size < MAC_SIZE)
+		return 1;
+
+	memcpy(buf, fw, MAC_SIZE);
+	buf[MAC_SIZE] = '\0';
+
+	if (sscanf(buf, "%x:%x:%x:%x:%x:%x",
+						&bytes[0],
+						&bytes[1],
+						&bytes[2],
+						&bytes[3],
+						&bytes[4],
+						&bytes[5]) == 6)
+	{
+		for (i = 0; i < 6; i++)
+			if (bytes[i] > 0xff || bytes[i] < 0x00)
+				return 1;
+
+		pr_info("%s: %s\n", __func__, buf);
+
+		for (j = 0; j < VOS_MAX_CONCURRENCY_PERSONA; j++)
+			for (i = 0; i < 6; i++)
+				pHddCtx->cfg_ini->intfMacAddr[j].bytes[i] = bytes[i];
+
+		return 0;
+	}
+
+	return 1;
+}
+
+static int wlan_download_custom_mac_addr(hdd_context_t *pHddCtx)
+{
+	int ret;
+
+	if (request_firmware(&wlan_mac, MAC_PATH_CUSTOM, pHddCtx->parent_dev) == 0) {
+		pr_info("%s: Custom MAC address firmware found\n", __func__);
+		ret = wlan_parse_fw_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
+	} else if (request_firmware(&wlan_mac, MAC_PATH_DEFAULT, pHddCtx->parent_dev) == 0) {
+		pr_info("%s: Default MAC address firmware found\n", __func__);
+		ret = wlan_parse_fw_mac_addr(pHddCtx, wlan_mac->data, wlan_mac->size);
+	} else {
+		pr_info("%s: MAC address firmware is not found\n", __func__);
+		return 1;
+	}
+
+	if (ret)
+		pr_info("%s: Parsing failed, invailed address\n", __func__);
+	else
+		pr_info("%s: Parsing succeeded\n", __func__);
+
+	release_firmware(wlan_mac);
+
+	return ret;
+}
+
 
 /**---------------------------------------------------------------------------
 
@@ -5812,7 +5881,8 @@ int hdd_wlan_startup(struct device *dev )
                 "using MAC from ini file ", __func__);
       }
    }
-   else if (VOS_STATUS_SUCCESS != hdd_update_config_from_nv(pHddCtx))
+   else if ((VOS_STATUS_SUCCESS != hdd_update_config_from_nv(pHddCtx)) &&
+		(wlan_download_custom_mac_addr(pHddCtx) != 0))
    {
       // Apply the NV to cfg.dat
       /* Prima Update MAC address only at here */
