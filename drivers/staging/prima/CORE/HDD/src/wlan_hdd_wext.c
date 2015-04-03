@@ -2422,9 +2422,9 @@ VOS_STATUS  wlan_hdd_get_station_stats(hdd_adapter_t *pAdapter)
                                &context);
    if (eHAL_STATUS_SUCCESS != hstatus)
    {
-      hddLog(VOS_TRACE_LEVEL_ERROR,
+      /* hddLog(VOS_TRACE_LEVEL_ERROR,
              "%s: Unable to retrieve statistics",
-             __func__);
+             __func__); */
       /* we'll return with cached values */
    }
    else
