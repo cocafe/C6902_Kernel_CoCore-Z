@@ -19,7 +19,7 @@
 #include <linux/mfd/wcd9xxx/wcd9320_registers.h>
 #include "wcd9320_control.h"
 
-#define TAIKO_CONTROL_VERSION			"r02"
+#define TAIKO_CONTROL_VERSION			"r03"
 
 struct snd_soc_codec *wcd9320_codec;
 
@@ -39,7 +39,7 @@ u32 hplanagain = 0x20;
 u32 hpranagain = 0x20;
 u32 hpldiggain = 0x08;
 u32 hprdiggain = 0x08;
-u32 spkdiggain = 0x02;
+u32 spkdiggain = 0x03;
 
 static ssize_t version_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -231,14 +231,14 @@ _RX_VOL_CONTROL(hpldig_gain, hpldiggain, hpldiggain_con, TAIKO_A_CDC_RX1_VOL_CTL
 _RX_VOL_CONTROL(hprdig_gain, hprdiggain, hprdiggain_con, TAIKO_A_CDC_RX2_VOL_CTL_B2_CTL, hpwidget);
 _RX_VOL_CONTROL(spkdig_gain, spkdiggain, spkdiggain_con, TAIKO_A_CDC_RX7_VOL_CTL_B2_CTL, spkwidget);
 
-static ssize_t spkdrv_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t spkdrv_on_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf, "Speaker Driver: %s\n", spkdrv_ena ? "on" : "off");
 
 	return strlen(buf);
 }
 
-static ssize_t spkdrv_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t spkdrv_on_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	if (sysfs_streq(buf, "on")) {
 		spkdrv_ena = true;
@@ -264,7 +264,7 @@ static ssize_t spkdrv_store(struct kobject *kobj, struct kobj_attribute *attr, c
 
 	return count;
 }
-static struct kobj_attribute spkdrv_interface = __ATTR(spkdrv, 0644, spkdrv_show, spkdrv_store);
+static struct kobj_attribute spkdrv_on_interface = __ATTR(spkdrv_on, 0644, spkdrv_on_show, spkdrv_on_store);
 
 #define _BIAS_CONTROL_(_file, _string, _reg, _por)			\
 static ssize_t _file##_show(struct kobject *kobj, 			\
@@ -358,18 +358,6 @@ static struct kobj_attribute hph_uhqa_interface = __ATTR(hph_uhqa, 0644, hph_uhq
 
 static struct attribute *taiko_control_attrs[] = {
 	&version_interface.attr,
-	&hplana_gain_interface.attr,
-	&hprana_gain_interface.attr,
-	&hpldig_gain_interface.attr,
-	&hprdig_gain_interface.attr,
-	&spkdig_gain_interface.attr,
-	&spkdrv_interface.attr,
-	&hpdac_bias_interface.attr,
-	&hpldo_bias_interface.attr,
-	&eardac_bias_interface.attr,
-	&linedac_bias_interface.attr,
-	&spkdac_bias_interface.attr,
-	&hph_uhqa_interface.attr,
 	NULL,
 };
 
@@ -384,6 +372,72 @@ static struct attribute *taiko_debug_attrs[] = {
 static struct attribute_group taiko_debug_interface_group = {
 	.attrs = taiko_debug_attrs,
 	.name  = "debug",
+};
+
+static struct attribute *taiko_bias_attrs[] = {
+	&hpdac_bias_interface.attr,
+	&hpldo_bias_interface.attr,
+	&eardac_bias_interface.attr,
+	&linedac_bias_interface.attr,
+	&spkdac_bias_interface.attr,
+	NULL,
+};
+
+static struct attribute_group taiko_bias_interface_group = {
+	.attrs = taiko_bias_attrs,
+	.name  = "bias",
+};
+
+static struct attribute *taiko_headset_attrs[] = {
+	&hplana_gain_interface.attr,
+	&hprana_gain_interface.attr,
+	&hpldig_gain_interface.attr,
+	&hprdig_gain_interface.attr,
+	&hph_uhqa_interface.attr,
+	NULL,
+};
+
+static struct attribute_group taiko_headset_interface_group = {
+	.attrs = taiko_headset_attrs,
+	.name  = "headset",
+};
+
+static struct attribute *taiko_speaker_attrs[] = {
+	&spkdig_gain_interface.attr,
+	&spkdrv_on_interface.attr,
+	NULL,
+};
+
+static struct attribute_group taiko_speaker_interface_group = {
+	.attrs = taiko_speaker_attrs,
+	.name  = "speaker",
+};
+
+static struct attribute *taiko_earpiece_attrs[] = {
+	NULL,
+};
+
+static struct attribute_group taiko_earpiece_interface_group = {
+	.attrs = taiko_earpiece_attrs,
+	.name  = "earpiece",
+};
+
+static struct attribute *taiko_lineout_attrs[] = {
+	NULL,
+};
+
+static struct attribute_group taiko_lineout_interface_group = {
+	.attrs = taiko_lineout_attrs,
+	.name  = "lineout",
+};
+
+static struct attribute *taiko_dmic_attrs[] = {
+	NULL,
+};
+
+static struct attribute_group taiko_dmic_interface_group = {
+	.attrs = taiko_dmic_attrs,
+	.name  = "dmic",
 };
 
 static struct kobject *taiko_control_kobject;
@@ -402,6 +456,12 @@ static int __init taiko_control_init(void)
 	}
 
 	ret = sysfs_create_group(taiko_control_kobject, &taiko_debug_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_bias_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_headset_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_speaker_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_lineout_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_earpiece_interface_group);
+	ret = sysfs_create_group(taiko_control_kobject, &taiko_dmic_interface_group);
 	if (ret) {
 		pr_err("Taiko Control: Failed to create debug sysfs group\n");
 	}
