@@ -525,8 +525,6 @@ static ssize_t store_scaling_min_freq
 	return ret ? ret : count;
 }
 
-static u32 last_user_maxfreq = 0;
-
 static ssize_t store_scaling_max_freq
 (struct cpufreq_policy *policy, const char *buf, size_t count)
 {
@@ -542,19 +540,6 @@ static ssize_t store_scaling_max_freq
 	ret = sscanf(buf, "%u", &new_policy.max);
 	if (ret != 1)
 		return -EINVAL;
-
-	if (sysfs_streq(current->comm, "system_monitor")) {
-		if ((new_policy.max >= policy->max)
-			&& (last_user_maxfreq == 0))
-			return -EINVAL;
-
-		if (new_policy.max <= 1728000) {
-			last_user_maxfreq = policy->max;
-		} else {
-			new_policy.max = last_user_maxfreq;
-			last_user_maxfreq = 0;
-		}
-	}
 
 	ret = cpufreq_driver->verify(&new_policy);
 	if (ret)
