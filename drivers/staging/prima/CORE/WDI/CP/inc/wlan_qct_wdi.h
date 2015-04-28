@@ -397,8 +397,8 @@ typedef enum
   /* TDLS_Indication */
   WDI_TDLS_IND,
 
-  /* LPHB Timeout Indication from FW to umac */
-  WDI_LPHB_WAIT_TIMEOUT_IND,
+  /* LPHB Indication from FW to umac */
+  WDI_LPHB_IND,
 
   /* IBSS Peer Inactivity Indication */
   WDI_IBSS_PEER_INACTIVITY_IND,
@@ -4394,6 +4394,8 @@ typedef struct
    wpt_uint16 timeout;
    wpt_uint8  session;
    wpt_uint8  gateway_mac[WDI_MAC_ADDR_LEN];
+   wpt_uint16 timePeriodSec; // in seconds
+   wpt_uint32 tcpSn;
 } WDI_LPHBTcpParamStruct;
 
 typedef struct
@@ -4550,7 +4552,7 @@ typedef struct
   wpt_uint8    ucChannelCount;
 
   /*the actual channels*/
-  wpt_uint8    aChannels[WDI_PNO_MAX_NETW_CHANNELS];
+  wpt_uint8    aChannels[WDI_PNO_MAX_NETW_CHANNELS_EX];
 
   /*rssi threshold that a network must meet to be considered, 0 - for any*/
   wpt_uint8    rssiThreshold;

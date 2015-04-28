@@ -11,9 +11,12 @@ ifeq ($(KERNEL_BUILD),1)
 	# Need to explicitly define for Kernel-based builds
 	MODNAME := wlan
 	WLAN_ROOT := drivers/staging/prima
+
+	#Flag to enable TDLS feature
+	CONFIG_QCOM_TDLS := y
 endif
 
-ifeq ($(KERNEL_BUILD),0)
+ifeq ($(KERNEL_BUILD), 0)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
 
@@ -40,6 +43,9 @@ ifeq ($(KERNEL_BUILD),0)
 	CONFIG_WLAN_FEATURE_11W := y
 	endif
 
+	#Flag to enable new Linux Regulatory implementation
+	CONFIG_ENABLE_LINUX_REG := y
+
 endif
 
 # Feature flags which are not (currently) configurable via Kconfig
@@ -51,7 +57,7 @@ BUILD_DEBUG_VERSION := 1
 BUILD_DIAG_VERSION := 1
 
 #Do we panic on bug?  default is to warn
-PANIC_ON_BUG := 1
+PANIC_ON_BUG := 0
 
 #Re-enable wifi on WDI timeout
 RE_ENABLE_WIFI_ON_WDI_TIMEOUT := 0
@@ -529,6 +535,8 @@ CDEFINES :=	-DANI_BUS_TYPE_PLATFORM=1 \
 		-DWLAN_FEATURE_GTK_OFFLOAD \
 		-DWLAN_WAKEUP_EVENTS \
 	        -DWLAN_KD_READY_NOTIFIER \
+		-DWLAN_FEATURE_RELIABLE_MCAST \
+		-DWLAN_NL80211_TESTMODE \
 		-DFEATURE_WLAN_LPHB
 
 ifneq ($(CONFIG_PRONTO_WLAN),)
@@ -640,6 +648,10 @@ endif
 
 ifeq ($(findstring opensource, $(WLAN_ROOT)), opensource)
 CDEFINES += -DWLAN_OPEN_SOURCE
+endif
+
+ifeq ($(CONFIG_ENABLE_LINUX_REG), y)
+CDEFINES += -DCONFIG_ENABLE_LINUX_REG
 endif
 
 # Fix build for GCC 4.7

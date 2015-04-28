@@ -526,6 +526,8 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
    tANI_U32       configParamSize;
    tANI_U32       *configDataValue;
    WDI_WlanVersionType wcnssCompiledApiVersion;
+   tANI_U8        i;
+
    if ((NULL == pMac)||(NULL == wdaContext))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -1371,6 +1373,68 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
    tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct 
                             + sizeof(tHalCfg) + tlvStruct->length) ; 
 
+   for (i = 0; i < QWLAN_HAL_CFG_MWS_COEX_MAX_VICTIM; i++)
+   {
+      /* [COEX] QWLAN_HAL_CFG_MWS_COEX_VX_WAN_FREQ */
+      tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_V1_WAN_FREQ + i*4;
+      tlvStruct->length = sizeof(tANI_U32);
+      configDataValue = (tANI_U32 *)(tlvStruct + 1);
+      *configDataValue = pMac->btc.btcConfig.mwsCoexVictimWANFreq[i];
+      tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                               + sizeof(tHalCfg) + tlvStruct->length) ;
+
+      /* [COEX] QWLAN_HAL_CFG_MWS_COEX_VX_WLAN_FREQ */
+      tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_V1_WLAN_FREQ + i*4;
+      tlvStruct->length = sizeof(tANI_U32);
+      configDataValue = (tANI_U32 *)(tlvStruct + 1);
+      *configDataValue = pMac->btc.btcConfig.mwsCoexVictimWLANFreq[i];
+      tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                               + sizeof(tHalCfg) + tlvStruct->length) ;
+
+      /* [COEX] QWLAN_HAL_CFG_MWS_COEX_VX_CONFIG */
+      tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_V1_CONFIG + i*4;
+      tlvStruct->length = sizeof(tANI_U32);
+      configDataValue = (tANI_U32 *)(tlvStruct + 1);
+      *configDataValue = pMac->btc.btcConfig.mwsCoexVictimConfig[i];
+      tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                               + sizeof(tHalCfg) + tlvStruct->length) ;
+
+      /* [COEX] QWLAN_HAL_CFG_MWS_COEX_VX_CONFIG2 */
+      tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_V1_CONFIG2 + i*4;
+      tlvStruct->length = sizeof(tANI_U32);
+      configDataValue = (tANI_U32 *)(tlvStruct + 1);
+      *configDataValue = pMac->btc.btcConfig.mwsCoexVictimConfig2[i];
+      tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                               + sizeof(tHalCfg) + tlvStruct->length) ;
+   }
+
+   /* [COEX] QWLAN_HAL_CFG_MWS_COEX_MODEM_BACKOFF */
+   tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_MODEM_BACKOFF  ;
+   tlvStruct->length = sizeof(tANI_U32);
+   configDataValue = (tANI_U32 *)(tlvStruct + 1);
+   *configDataValue = pMac->btc.btcConfig.mwsCoexModemBackoff;
+   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                            + sizeof(tHalCfg) + tlvStruct->length) ;
+
+   for (i = 0; i < QWLAN_HAL_CFG_MWS_COEX_MAX_CONFIG; i++)
+   {
+      /* [COEX] QWLAN_HAL_CFG_MWS_COEX_CONFIGX */
+      tlvStruct->type = QWLAN_HAL_CFG_MWS_COEX_CONFIG1 + i;
+      tlvStruct->length = sizeof(tANI_U32);
+      configDataValue = (tANI_U32 *)(tlvStruct + 1);
+      *configDataValue = pMac->btc.btcConfig.mwsCoexConfig[i];
+      tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                               + sizeof(tHalCfg) + tlvStruct->length) ;
+   }
+
+   /* [COEX] QWLAN_HAL_CFG_SAR_POWER_BACKOFF */
+   tlvStruct->type = QWLAN_HAL_CFG_SAR_POWER_BACKOFF  ;
+   tlvStruct->length = sizeof(tANI_U32);
+   configDataValue = (tANI_U32 *)(tlvStruct + 1);
+   *configDataValue = pMac->btc.btcConfig.SARPowerBackoff;
+   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                            + sizeof(tHalCfg) + tlvStruct->length) ;
+
    /* QWLAN_HAL_CFG_WCNSS_API_VERSION */
    tlvStruct->type = QWLAN_HAL_CFG_WCNSS_API_VERSION  ;
    tlvStruct->length = sizeof(tANI_U32);
@@ -1584,6 +1648,20 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
       goto handle_failure;
    }
 
+   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
+                            + sizeof(tHalCfg) + tlvStruct->length) ;
+
+   /* QWLAN_HAL_CFG_GO_LINK_MONITOR_TIMEOUT   */
+   tlvStruct->type = QWLAN_HAL_CFG_GO_LINK_MONITOR_TIMEOUT  ;
+   tlvStruct->length = sizeof(tANI_U32);
+   configDataValue = (tANI_U32 *)(tlvStruct + 1);
+   if(wlan_cfgGetInt(pMac, WNI_CFG_GO_LINK_MONITOR_TIMEOUT,
+                                            configDataValue ) != eSIR_SUCCESS)
+   {
+      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+               "Failed to get value for WNI_CFG_GO_LINK_MONITOR_TIMEOUT");
+      goto handle_failure;
+   }
    tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
                             + sizeof(tHalCfg) + tlvStruct->length) ;
 
@@ -11940,33 +12018,33 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
       }
   
 #ifdef FEATURE_WLAN_LPHB
-      case WDI_LPHB_WAIT_TIMEOUT_IND:
+      case WDI_LPHB_IND:
       {
-         vos_msg_t            vosMsg;
-         tSirLPHBTimeoutInd  *lphbTimeoutInd;
+         vos_msg_t     vosMsg;
+         tSirLPHBInd  *lphbInd;
 
-         lphbTimeoutInd =
-           (tSirLPHBTimeoutInd *)vos_mem_malloc(sizeof(tSirLPHBTimeoutInd));
-         if (NULL == lphbTimeoutInd)
+         lphbInd =
+           (tSirLPHBInd *)vos_mem_malloc(sizeof(tSirLPHBInd));
+         if (NULL == lphbInd)
          {
             VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
                            "%s: LPHB IND buffer alloc Fail", __func__);
             return ;
          }
 
-         lphbTimeoutInd->sessionIdx =
+         lphbInd->sessionIdx =
               wdiLowLevelInd->wdiIndicationData.wdiLPHBTimeoutInd.sessionIdx;
-         lphbTimeoutInd->protocolType =
+         lphbInd->protocolType =
               wdiLowLevelInd->wdiIndicationData.wdiLPHBTimeoutInd.protocolType;
-         lphbTimeoutInd->eventReason =
+         lphbInd->eventReason =
               wdiLowLevelInd->wdiIndicationData.wdiLPHBTimeoutInd.eventReason;
 
          VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                   "Get WDI_LPHB_WAIT_TIMEOUT_IND bssIdx %d",
+                   "Get WDI_LPHB_IND bssIdx %d",
                    wdiLowLevelInd->wdiIndicationData.wdiLPHBTimeoutInd.bssIdx);
 
-         vosMsg.type    = eWNI_SME_LPHB_WAIT_TIMEOUT_IND;
-         vosMsg.bodyptr = lphbTimeoutInd;
+         vosMsg.type    = eWNI_SME_LPHB_IND;
+         vosMsg.bodyptr = lphbInd;
          vosMsg.bodyval = 0;
          /* Send message to SME */
          if (VOS_STATUS_SUCCESS !=
@@ -11974,7 +12052,7 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
          {
             VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_WARN,
                       "post WDI_LPHB_WAIT_TIMEOUT_IND to SME Failed");
-            vos_mem_free(lphbTimeoutInd);
+            vos_mem_free(lphbInd);
          }
          break;
       }

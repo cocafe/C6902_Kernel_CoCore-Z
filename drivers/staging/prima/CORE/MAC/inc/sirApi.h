@@ -647,8 +647,6 @@ typedef struct sSirSmeStartBssReq
 
     tANI_U8                 txLdpcIniFeatureEnabled;
 
-    tANI_U8                 oxygenNwkIniFeatureEnabled;
-
     tSirRSNie               rsnIE;             // RSN IE to be sent in
                                                // Beacon and Probe
                                                // Response frames
@@ -889,6 +887,21 @@ typedef struct sSirSmeScanReq
       -----------------------------*/
 } tSirSmeScanReq, *tpSirSmeScanReq;
 
+typedef struct sSirSmeScanAbortReq
+{
+    tANI_U16        type;
+    tANI_U16        msgLen;
+    tANI_U8         sessionId;
+} tSirSmeScanAbortReq, *tpSirSmeScanAbortReq;
+
+typedef struct sSirSmeScanChanReq
+{
+    tANI_U16        type;
+    tANI_U16        msgLen;
+    tANI_U8         sessionId;
+    tANI_U16        transcationId;
+} tSirSmeGetScanChanReq, *tpSirSmeGetScanChanReq;
+
 #ifdef FEATURE_OEM_DATA_SUPPORT
 
 #ifndef OEM_DATA_REQ_SIZE
@@ -1053,6 +1066,7 @@ typedef struct sSirSmeJoinReq
     tANI_U8             txBFIniFeatureEnabled;
     tANI_U8             txBFCsnValue;
 #endif
+    tANI_U8             isAmsduSupportInAMPDU;
 
     tAniTitanCBNeighborInfo cbNeighbors;
     tAniBool            spectrumMgtIndicator;
@@ -3298,7 +3312,9 @@ typedef struct sSirUpdateAPWPARSNIEsReq
 #define SIR_OFFLOAD_DISABLE                         0
 #define SIR_OFFLOAD_ENABLE                          1
 #define SIR_OFFLOAD_BCAST_FILTER_ENABLE             0x2
+#define SIR_OFFLOAD_MCAST_FILTER_ENABLE             0x4
 #define SIR_OFFLOAD_ARP_AND_BCAST_FILTER_ENABLE     (SIR_OFFLOAD_ENABLE|SIR_OFFLOAD_BCAST_FILTER_ENABLE)
+#define SIR_OFFLOAD_NS_AND_MCAST_FILTER_ENABLE      (SIR_OFFLOAD_ENABLE|SIR_OFFLOAD_MCAST_FILTER_ENABLE)
 
 #ifdef WLAN_NS_OFFLOAD
 typedef struct sSirNsOffloadReq
@@ -3985,16 +4001,6 @@ typedef struct sSirTdlsDelAllPeerInd
    tANI_U16               length;
    tANI_U8                sessionId;     // Session ID
 } tSirTdlsDelAllPeerInd, *tpSirTdlsDelAllPeerInd;
-#ifdef FEATURE_WLAN_TDLS_OXYGEN_DISAPPEAR_AP
-typedef struct sSirTdlsDisappearAPInd
-{
-   tANI_U16               messageType;
-   tANI_U16               length;
-   tANI_U8                sessionId;     // Session ID
-   tANI_U16               staId;
-   tSirMacAddr            staAddr;
-} tSirTdlsDisappearAPInd, *tpSirTdlsDisappearAPInd;
-#endif
 typedef struct sSirMgmtTxCompletionInd
 {
    tANI_U16               messageType;
@@ -4301,6 +4307,8 @@ typedef struct sSirLPHBTcpParamStruct
    v_U16_t      timeout;
    v_U8_t       session;
    tSirMacAddr  gateway_mac;
+   uint16       timePeriodSec; // in seconds
+   uint32       tcpSn;
 } tSirLPHBTcpParamStruct;
 
 typedef struct sSirLPHBTcpFilterStruct
@@ -4345,12 +4353,12 @@ typedef struct sSirLPHBReq
    } params;
 } tSirLPHBReq;
 
-typedef struct sSirLPHBTimeoutInd
+typedef struct sSirLPHBInd
 {
    v_U8_t sessionIdx;
    v_U8_t protocolType; /*TCP or UDP*/
    v_U8_t eventReason;
-} tSirLPHBTimeoutInd;
+} tSirLPHBInd;
 #endif /* FEATURE_WLAN_LPHB */
 
 typedef struct sSirAddPeriodicTxPtrn

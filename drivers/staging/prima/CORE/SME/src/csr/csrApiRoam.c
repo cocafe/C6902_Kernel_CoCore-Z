@@ -916,7 +916,8 @@ eCsrRoamState csrRoamStateChange( tpAniSirGlobal pMac, eCsrRoamState NewRoamStat
 {
     eCsrRoamState PreviousState;
           
-    smsLog( pMac, LOG1, "CSR RoamState: [ %d <== %d ]", NewRoamState, pMac->roam.curState[sessionId]);
+    smsLog( pMac, LOG1, "CSR RoamState[%hu]: [ %d <== %d ]", sessionId,
+            NewRoamState, pMac->roam.curState[sessionId]);
 
     PreviousState = pMac->roam.curState[sessionId];
     
@@ -1565,7 +1566,8 @@ eHalStatus csrChangeDefaultConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pPa
         pMac->roam.configParam.enableVhtFor24GHz = pParam->enableVhtFor24GHz;
 #endif
         pMac->roam.configParam.txLdpcEnable = pParam->enableTxLdpc;
-        pMac->roam.configParam.enableOxygenNwk = pParam->enableOxygenNwk;
+
+        pMac->roam.configParam.isAmsduSupportInAMPDU = pParam->isAmsduSupportInAMPDU;
     }
     
     return status;
@@ -1687,7 +1689,8 @@ eHalStatus csrGetConfigParam(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 #endif
 
         pParam->enableTxLdpc = pMac->roam.configParam.txLdpcEnable;
-        pParam->enableOxygenNwk = pMac->roam.configParam.enableOxygenNwk;
+
+        pParam->isAmsduSupportInAMPDU = pMac->roam.configParam.isAmsduSupportInAMPDU;
 
         csrSetChannels(pMac, pParam);
 
@@ -5978,7 +5981,7 @@ eHalStatus csrRoamIssueConnect(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoam
         if( fClearScan )
         {
             csrScanCancelIdleScan(pMac);
-            csrScanAbortMacScanNotForConnect(pMac);
+            csrScanAbortMacScanNotForConnect(pMac, sessionId);
         }
         pCommand->u.roamCmd.fReleaseProfile = eANI_BOOLEAN_FALSE;
         if(NULL == pProfile)
@@ -6038,7 +6041,7 @@ eHalStatus csrRoamIssueReassoc(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoam
     else
     {
         csrScanCancelIdleScan(pMac);
-        csrScanAbortMacScanNotForConnect(pMac);
+        csrScanAbortMacScanNotForConnect(pMac, sessionId);
         if(pProfile)
         {
            //This is likely trying to reassoc to different profile
@@ -6197,7 +6200,7 @@ eHalStatus csrRoamConnect(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
     csrScanRemoveFreshScanCommand(pMac, sessionId);
     csrScanCancelIdleScan(pMac);
     //Only abort the scan if it is not used for other roam/connect purpose
-    csrScanAbortMacScan(pMac);
+    csrScanAbortMacScan(pMac, sessionId);
     if (!vos_concurrent_sessions_running() && (VOS_STA_SAP_MODE == pProfile->csrPersona))//In case of AP mode we do not want idle mode scan
     {
         csrScanDisable(pMac);
@@ -6363,7 +6366,7 @@ eHalStatus csrRoamReassoc(tpAniSirGlobal pMac, tANI_U32 sessionId, tCsrRoamProfi
    csrRoamCancelRoaming(pMac, sessionId);
    csrScanRemoveFreshScanCommand(pMac, sessionId);
    csrScanCancelIdleScan(pMac);
-   csrScanAbortMacScanNotForConnect(pMac);
+   csrScanAbortMacScanNotForConnect(pMac, sessionId);
    csrRoamRemoveDuplicateCommand(pMac, sessionId, NULL, eCsrHddIssuedReassocToSameAP);
    if(csrIsConnStateConnected(pMac, sessionId))
    {
@@ -6433,7 +6436,7 @@ eHalStatus csrRoamJoinLastProfile(tpAniSirGlobal pMac, tANI_U32 sessionId)
         if(pSession->pCurRoamProfile)
         {
             csrScanCancelIdleScan(pMac);
-            csrScanAbortMacScanNotForConnect(pMac);
+            csrScanAbortMacScanNotForConnect(pMac, sessionId);
             //We have to make a copy of pCurRoamProfile because it will be free inside csrRoamIssueConnect
             status = palAllocateMemory(pMac->hHdd, (void **)&pProfile, sizeof(tCsrRoamProfile));
             if(!HAL_STATUS_SUCCESS(status))
@@ -9013,6 +9016,24 @@ void csrRoamCheckForLinkStatusChange( tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg )
                 tpSirSmeMicFailureInd pMicInd = (tpSirSmeMicFailureInd)pSirMsg;
                 tCsrRoamInfo roamInfo, *pRoamInfo = NULL;
                 eCsrRoamResult result = eCSR_ROAM_RESULT_MIC_ERROR_UNICAST;
+
+                status = csrRoamGetSessionIdFromBSSID( pMac, (tCsrBssid *)pMicInd->bssId, &sessionId );
+                if( HAL_STATUS_SUCCESS( status ) )
+                {
+                    palZeroMemory(pMac->hHdd, &roamInfo, sizeof(tCsrRoamInfo));
+                    roamInfo.u.pMICFailureInfo = &pMicInd->info;
+                    pRoamInfo = &roamInfo;
+                    if(pMicInd->info.multicast)
+                    {
+                        result = eCSR_ROAM_RESULT_MIC_ERROR_GROUP;
+                    }
+                    else
+                    {
+                        result = eCSR_ROAM_RESULT_MIC_ERROR_UNICAST;
+                    }
+                    csrRoamCallCallback(pMac, sessionId, pRoamInfo, 0, eCSR_ROAM_MIC_ERROR_IND, result);
+                }
+
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_CSR
                 {
                     WLAN_VOS_DIAG_EVENT_DEF(secEvent, vos_event_wlan_security_payload_type);
@@ -9035,22 +9056,7 @@ void csrRoamCheckForLinkStatusChange( tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg )
                     WLAN_VOS_DIAG_EVENT_REPORT(&secEvent, EVENT_WLAN_SECURITY);
                 }
 #endif//FEATURE_WLAN_DIAG_SUPPORT_CSR
-                status = csrRoamGetSessionIdFromBSSID( pMac, (tCsrBssid *)pMicInd->bssId, &sessionId );
-                if( HAL_STATUS_SUCCESS( status ) )
-                {
-                    palZeroMemory(pMac->hHdd, &roamInfo, sizeof(tCsrRoamInfo));
-                    roamInfo.u.pMICFailureInfo = &pMicInd->info;
-                    pRoamInfo = &roamInfo;
-                    if(pMicInd->info.multicast)
-                    {
-                        result = eCSR_ROAM_RESULT_MIC_ERROR_GROUP;
-                    }
-                    else
-                    {
-                        result = eCSR_ROAM_RESULT_MIC_ERROR_UNICAST;
-                    }
-                    csrRoamCallCallback(pMac, sessionId, pRoamInfo, 0, eCSR_ROAM_MIC_ERROR_IND, result);
-                }
+
             }
             break;
         case eWNI_SME_WPS_PBC_PROBE_REQ_IND:
@@ -9736,7 +9742,7 @@ void csrRoamCancelRoaming(tpAniSirGlobal pMac, tANI_U32 sessionId)
             //Roaming is stopped after here 
             csrRoamCompleteRoaming(pMac, sessionId, eANI_BOOLEAN_TRUE, roamResult);
             //Since CSR may be in lostlink roaming situation, abort all roaming related activities
-            csrScanAbortMacScan(pMac);
+            csrScanAbortMacScan(pMac, sessionId);
             csrRoamStopRoamingTimer(pMac, sessionId);
         }
     }
@@ -11380,6 +11386,39 @@ eHalStatus csrRoamSetPMKIDCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
     return (status);
 }
 
+eHalStatus csrRoamDelPMKIDfromCache( tpAniSirGlobal pMac, tANI_U32 sessionId,
+                                 tANI_U8 *pBSSId )
+{
+    eHalStatus status = eHAL_STATUS_FAILURE;
+    tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, sessionId );
+    tANI_BOOLEAN fMatchFound = FALSE;
+    tANI_U32 Index;
+    if(!pSession)
+    {
+        smsLog(pMac, LOGE, FL("  session %d not found "), sessionId);
+        return eHAL_STATUS_FAILURE;
+    }
+    do
+    {
+        for( Index=0; Index < pSession->NumPmkidCache; Index++ )
+        {
+            smsLog(pMac, LOGW, "Delete PMKID for %02X-%02X-%02X-%02X-%02X-%02X ",
+                pBSSId[0], pBSSId[1], pBSSId[2], pBSSId[3], pBSSId[4], pBSSId[5]);
+            if( palEqualMemory( pMac->hHdd, pBSSId, pSession->PmkidCacheInfo[Index].BSSID, sizeof(tCsrBssid) ) )
+            {
+                fMatchFound = TRUE;
+                break;
+            }
+        }
+        if( !fMatchFound ) break;
+        palZeroMemory( pMac->hHdd, pSession->PmkidCacheInfo[Index].BSSID, sizeof(tPmkidCacheInfo));
+        status = eHAL_STATUS_SUCCESS;
+    }
+    while( 0 );
+    smsLog(pMac, LOGW, "csrDelPMKID called return match = %d Status = %d",
+        fMatchFound, status);
+    return status;
+}
 tANI_U32 csrRoamGetNumPMKIDCache(tpAniSirGlobal pMac, tANI_U32 sessionId)
 {
     return (pMac->roam.roamSession[sessionId].NumPmkidCache);
@@ -12358,9 +12397,13 @@ eHalStatus csrSendJoinReqMsg( tpAniSirGlobal pMac, tANI_U32 sessionId, tSirBssDe
         *pBuf = (tANI_U8)pMac->roam.configParam.txBFCsnValue;
         pBuf++;
 #endif
+        *pBuf = (tANI_U8)pMac->roam.configParam.isAmsduSupportInAMPDU;
+        pBuf++;
+
         //BssDesc
         csrPrepareJoinReassocReqBuffer( pMac, pBssDescription, pBuf,
                 (tANI_U8)pProfile->uapsd_mask);
+
         status = palSendMBMessage(pMac->hHdd, pMsg );
         if(!HAL_STATUS_SUCCESS(status))
         {
@@ -13081,10 +13124,6 @@ eHalStatus csrSendMBStartBssReqMsg( tpAniSirGlobal pMac, tANI_U32 sessionId, eCs
         *pBuf = (tANI_U8)(tANI_U8)pMac->roam.configParam.txLdpcEnable;
         pBuf++;
 
-        // prop IE enabled in .ini file
-        *pBuf = (tANI_U8)pMac->roam.configParam.enableOxygenNwk;
-        pBuf++;
-
         // set RSN IE
         if( pParam->nRSNIELength > sizeof(pMsg->rsnIE.rsnIEdata) )
         {
@@ -13570,7 +13609,13 @@ void csrCleanupSession(tpAniSirGlobal pMac, tANI_U32 sessionId)
         vos_timer_destroy(&pSession->hTimerJoinRetry);
 #endif
         vos_timer_destroy(&pSession->hTimerIbssJoining);
-        purgeSmeSessionCmdList(pMac, sessionId);
+        purgeSmeSessionCmdList(pMac, sessionId, &pMac->sme.smeCmdPendingList);
+        if (pMac->fScanOffload)
+        {
+            purgeSmeSessionCmdList(pMac, sessionId,
+                    &pMac->sme.smeScanCmdPendingList);
+        }
+
         purgeCsrSessionCmdList(pMac, sessionId);
         csrInitSession(pMac, sessionId);
     }
@@ -13591,7 +13636,13 @@ eHalStatus csrRoamCloseSession( tpAniSirGlobal pMac, tANI_U32 sessionId,
         }
         else
         { 
-            purgeSmeSessionCmdList(pMac, sessionId);
+            purgeSmeSessionCmdList(pMac, sessionId,
+                    &pMac->sme.smeCmdPendingList);
+            if (pMac->fScanOffload)
+            {
+                purgeSmeSessionCmdList(pMac, sessionId,
+                        &pMac->sme.smeScanCmdPendingList);
+            }
             purgeCsrSessionCmdList(pMac, sessionId);
             status = csrIssueDelStaForSessionReq( pMac, sessionId,
                                         pSession->selfMacAddr, callback, pContext);
@@ -14885,12 +14936,13 @@ eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reas
    tSirRoamOffloadScanReq *pRequestBuf;
    tpCsrNeighborRoamControlInfo    pNeighborRoamInfo = &pMac->roam.neighborRoamInfo;
    tCsrRoamSession *pSession;
-   tANI_U8 i,num_channels = 0, ucDot11Mode;
+   tANI_U8 i,j,num_channels = 0, ucDot11Mode;
    tANI_U8 *ChannelList = NULL;
    tANI_U32 sessionId;
    eHalStatus status = eHAL_STATUS_SUCCESS;
    tpCsrChannelInfo    currChannelListInfo;
    tANI_U32 host_channels = 0;
+   tANI_U8 ChannelCacheStr[128] = {0};
    currChannelListInfo = &pNeighborRoamInfo->roamChannelInfo.currentChannelListInfo;
 
    if (0 == csrRoamIsRoamOffloadScanEnabled(pMac))
@@ -15029,22 +15081,32 @@ eHalStatus csrRoamOffloadScan(tpAniSirGlobal pMac, tANI_U8 command, tANI_U8 reas
       /* If CCX is enabled, and a neighbor Report is received,then
        * Ignore the INI Channels or the Occupied Channel List. Consider
        * the channels in the neighbor list sent by the CCX AP.*/
-      if (currChannelListInfo->numOfChannels != 0)
-      {
-         ChannelList = currChannelListInfo->ChannelList;
-         for (i=0;i<currChannelListInfo->numOfChannels;i++)
-         {
-          if(!CSR_IS_CHANNEL_DFS(*ChannelList) && *ChannelList)
+       if (currChannelListInfo->numOfChannels != 0)
+       {
+          ChannelList = currChannelListInfo->ChannelList;
+          for (i=0;i<currChannelListInfo->numOfChannels;i++)
           {
-           pRequestBuf->ConnectedNetwork.ChannelCache[num_channels++] = *ChannelList;
+           if(!CSR_IS_CHANNEL_DFS(*ChannelList) && *ChannelList)
+           {
+            pRequestBuf->ConnectedNetwork.ChannelCache[num_channels++] = *ChannelList;
+           }
+           ChannelList++;
           }
-          ChannelList++;
-         }
-         pRequestBuf->ConnectedNetwork.ChannelCount = num_channels;
-         pRequestBuf->ChannelCacheType = CHANNEL_LIST_STATIC;
-      }
-    }
+          pRequestBuf->ConnectedNetwork.ChannelCount = num_channels;
+          pRequestBuf->ChannelCacheType = CHANNEL_LIST_DYNAMIC_UPDATE;
+       }
+     }
 #endif
+    for (i = 0, j = 0; i < pRequestBuf->ConnectedNetwork.ChannelCount; i++)
+    {
+            j += snprintf(ChannelCacheStr + j, sizeof(ChannelCacheStr) - j," %d",
+                          pRequestBuf->ConnectedNetwork.ChannelCache[i]);
+    }
+    VOS_TRACE(VOS_MODULE_ID_SME, VOS_TRACE_LEVEL_DEBUG,
+              "ChnlCacheType:%d, No of Chnls:%d,Channels: %s",
+              pRequestBuf->ChannelCacheType,
+              pRequestBuf->ConnectedNetwork.ChannelCount,
+              ChannelCacheStr);
     num_channels = 0;
     ChannelList = NULL;
 

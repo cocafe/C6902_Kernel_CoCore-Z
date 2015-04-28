@@ -168,6 +168,11 @@ static placeHolderInCapBitmap supportEnabledFeatures[] =
     ,IBSS_HEARTBEAT_OFFLOAD         //26
     ,FEATURE_NOT_SUPPORTED          //27
     ,WLAN_PERIODIC_TX_PTRN          //28
+#ifdef FEATURE_WLAN_TDLS
+    ,ADVANCE_TDLS                   //29
+#else
+    ,FEATURE_NOT_SUPPORTED          //29
+#endif
    };
 
 /*-------------------------------------------------------------------------- 
@@ -624,7 +629,7 @@ WDI_RspProcFuncType  pfnRspProcTbl[WDI_MAX_RESP] =
 #endif
 
 #ifdef FEATURE_WLAN_LPHB
-  WDI_ProcessLphbWaitTimeoutInd,    /* WDI_HAL_LPHB_WAIT_TIMEOUT_IND */
+  WDI_ProcessLphbInd,                   /* WDI_HAL_LPHB_IND */
 #else
   NULL,
 #endif /* FEATURE_WLAN_LPHB */
@@ -22863,7 +22868,7 @@ case WLAN_HAL_DEL_STA_SELF_RSP:
 
 #ifdef FEATURE_WLAN_LPHB
   case WLAN_HAL_LPHB_IND:
-    return WDI_HAL_LPHB_WAIT_TIMEOUT_IND;
+    return WDI_HAL_LPHB_IND;
   case WLAN_HAL_LPHB_CFG_RSP:
     return WDI_LPHB_CFG_RESP;
 #endif /* FEATURE_WLAN_LPHB */
@@ -27968,7 +27973,7 @@ void WDI_SetEnableSSR(wpt_boolean  enableSSR)
 
 #ifdef FEATURE_WLAN_LPHB
 /**
- @brief WDI_ProcessLphbWaitTimeoutInd -
+ @brief WDI_ProcessLphbInd -
     This function will be invoked when FW detects low power
     heart beat failure
 
@@ -27978,14 +27983,14 @@ void WDI_SetEnableSSR(wpt_boolean  enableSSR)
  @return Result of the function call
 */
 WDI_Status
-WDI_ProcessLphbWaitTimeoutInd
+WDI_ProcessLphbInd
 (
   WDI_ControlBlockType*  pWDICtx,
   WDI_EventInfoType*     pEventData
 )
 {
   WDI_LowLevelIndType  wdiInd;
-  tHalLowPowerHeartBeatIndMsg *lphbIndicationParam;
+  tHalLowPowerHeartBeatIndParam lphbIndicationParam;
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
   /*-------------------------------------------------------------------------
@@ -28003,17 +28008,19 @@ WDI_ProcessLphbWaitTimeoutInd
   /*-------------------------------------------------------------------------
   Extract indication and send it to UMAC
  -------------------------------------------------------------------------*/
-  lphbIndicationParam = (tHalLowPowerHeartBeatIndMsg *)pEventData->pEventData;
+   wpalMemoryCopy(&lphbIndicationParam,
+                  pEventData->pEventData,
+                  sizeof(tHalLowPowerHeartBeatIndParam));
 
-  wdiInd.wdiIndicationType = WDI_LPHB_WAIT_TIMEOUT_IND;
+  wdiInd.wdiIndicationType = WDI_LPHB_IND;
   wdiInd.wdiIndicationData.wdiLPHBTimeoutInd.bssIdx =
-               lphbIndicationParam->lowPowerHeartBeatIndParams.bssIdx;
+               lphbIndicationParam.bssIdx;
   wdiInd.wdiIndicationData.wdiLPHBTimeoutInd.sessionIdx =
-               lphbIndicationParam->lowPowerHeartBeatIndParams.sessionIdx;
+               lphbIndicationParam.sessionIdx;
   wdiInd.wdiIndicationData.wdiLPHBTimeoutInd.protocolType =
-               lphbIndicationParam->lowPowerHeartBeatIndParams.protocolType;
+               lphbIndicationParam.protocolType;
   wdiInd.wdiIndicationData.wdiLPHBTimeoutInd.eventReason =
-               lphbIndicationParam->lowPowerHeartBeatIndParams.eventReason;
+               lphbIndicationParam.eventReason;
   /*Notify UMAC*/
   if (pWDICtx->wdiLowLevelIndCB)
   {
@@ -28163,6 +28170,10 @@ WDI_Status WDI_ProcessLPHBConfReq
                                 pLphbReqParams->params.lphbTcpParamReq.src_port;
       halLphbReqRarams->options.tcpParams.destPort =
                                 pLphbReqParams->params.lphbTcpParamReq.dst_port;
+      halLphbReqRarams->options.tcpParams.timePeriodSec =
+                                pLphbReqParams->params.lphbTcpParamReq.timePeriodSec;
+      halLphbReqRarams->options.tcpParams.tcpSn =
+                                pLphbReqParams->params.lphbTcpParamReq.tcpSn;
       break;
 
     case WDI_LPHB_SET_TCP_PKT_FILTER_INDID:
