@@ -232,8 +232,7 @@ int bdPduInterruptGetThreshold = WLANTL_BD_PDU_INTERRUPT_GET_THRESHOLD;
 #define SWAP_ENDIAN_UINT32(a)          ((a) = ((a) >> 0x18 ) |(((a) & 0xFF0000) >> 0x08) | \
                                             (((a) & 0xFF00) << 0x08)  | (((a) & 0xFF) << 0x18))
 
-/* Maximum value of SNR that can be calculated by the HW */
-#define WLANTL_MAX_HW_SNR 35
+
 
 /*--------------------------------------------------------------------------
    TID to AC mapping in TL
@@ -4209,7 +4208,7 @@ WLANTL_GetFrames
         if ( NULL != pfnSTAFsm )
         {
           pClientSTA->ucNoMoreData = 0;
-          vosStatus  = pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuf);
+          vosStatus  = pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuf, VOS_FALSE);
 
           if (( VOS_STATUS_SUCCESS != vosStatus ) &&
               ( NULL != vosTempBuf ))
@@ -4345,7 +4344,7 @@ WLANTL_GetFrames
           if ( NULL != pfnSTAFsm )
           {
             pClientSTA->ucNoMoreData = 0;
-            vosStatus  = pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuf);
+            vosStatus  = pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuf, VOS_FALSE);
 
             if (( VOS_STATUS_SUCCESS != vosStatus ) &&
                 ( NULL != vosTempBuf ))
@@ -4925,7 +4924,7 @@ done:
 }/*WLANTL_ForwardSTAFrames*/
 
 
-#ifdef FEATURE_WLAN_CCX
+#if defined(FEATURE_WLAN_CCX) || defined(FEATURE_WLAN_CCX_UPLOAD)
 /*==========================================================================
 
   FUNCTION    WLANTL_IsIAPPFrame
@@ -5171,7 +5170,7 @@ WLANTL_ProcessBAPFrame
 
       /* software frame translation for BTAMP WDS.*/
       WLANTL_Translate80211To8023Header( vosTempBuff, &vosStatus, usActualHLen,
-                                         ucMPDUHLen, pTLCb,ucSTAId );
+                                         ucMPDUHLen, pTLCb,ucSTAId, VOS_FALSE);
       
     }
     if (pTLCb->tlBAPClient.pfnTlBAPRx)
@@ -5470,6 +5469,8 @@ WLANTL_RxFrames
   v_U8_t              ucMPDUHLen = 0 ;
   v_U16_t             usEtherType = 0;
 #endif
+  v_BOOL_t            bForwardIAPPwithLLC = VOS_FALSE;
+
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -*/
 
   TLLOG2(VOS_TRACE( VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO_HIGH,
@@ -5484,6 +5485,11 @@ WLANTL_RxFrames
                "WLAN TL:Invalid parameter sent on WLANTL_RxFrames"));
     return VOS_STATUS_E_INVAL;
   }
+
+ /*------------------------------------------------------------------------
+   Popolaute timestamp as the time when packet arrives
+   ---------------------------------------------------------------------- */
+   vosDataBuff->timestamp = vos_timer_get_system_ticks();
 
   /*------------------------------------------------------------------------
     Extract TL control block
@@ -5762,7 +5768,23 @@ WLANTL_RxFrames
         continue;
       }
 
-#ifdef FEATURE_WLAN_CCX
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+      if ((pClientSTA->wSTADesc.ucIsCcxSta)|| broadcast)
+      {
+        /*--------------------------------------------------------------------
+          Filter the IAPP frames for CCX connection;
+          if data it will return false and it
+          will be routed through the regular data path
+        --------------------------------------------------------------------*/
+        if ( WLANTL_IsIAPPFrame(pvBDHeader,
+                                vosTempBuff))
+        {
+            bForwardIAPPwithLLC = VOS_TRUE;
+        }
+      }
+#endif
+
+#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
       if ((pClientSTA->wSTADesc.ucIsCcxSta)|| broadcast)
       {
         /*--------------------------------------------------------------------
@@ -5790,7 +5812,7 @@ WLANTL_RxFrames
             continue;
         }
       }
-#endif
+#endif  /* defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD) */
 
       if ( WLAN_STA_BT_AMP == pClientSTA->wSTADesc.wSTAType )
       {
@@ -5857,7 +5879,7 @@ WLANTL_RxFrames
                            FL("Failed to Read SNR")));
         }
 
-        pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuff);
+        pfnSTAFsm( pvosGCtx, ucSTAId, &vosTempBuff, bForwardIAPPwithLLC);
       }
       else
         {
@@ -6129,7 +6151,7 @@ WLANTL_RxCachedFrames
            */
         }
         pfnSTAFsm( vos_get_global_context(VOS_MODULE_ID_TL,pTLCb), ucSTAId, 
-                 &vosTempBuff);
+                 &vosTempBuff, VOS_FALSE);
       }
       else
       {
@@ -6613,7 +6635,8 @@ WLANTL_STATxConn
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
    v_U16_t              usPktLen;
@@ -6986,7 +7009,8 @@ WLANTL_STATxAuth
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
    v_U16_t               usPktLen;
@@ -7436,7 +7460,8 @@ WLANTL_STATxDisc
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
    WLANTL_CbType*        pTLCb       = NULL;
@@ -7514,7 +7539,8 @@ WLANTL_STARxConn
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
    WLANTL_CbType*           pTLCb = NULL;
@@ -7637,7 +7663,7 @@ WLANTL_STARxConn
       }
 
       vosStatus = WLANTL_Translate80211To8023Header( vosDataBuff, &vosStatus, usActualHLen, 
-                      ucMPDUHLen, pTLCb, ucSTAId);
+                      ucMPDUHLen, pTLCb, ucSTAId, bForwardIAPPwithLLC);
 
         if ( VOS_STATUS_SUCCESS != vosStatus ) 
         {
@@ -7878,7 +7904,8 @@ WLANTL_STARxAuth
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
    WLANTL_CbType*           pTLCb = NULL;
@@ -8097,7 +8124,7 @@ WLANTL_STARxAuth
       usActualHLen = usMPDUDOffset - ucMPDUHOffset;
     }
     vosStatus = WLANTL_Translate80211To8023Header( vosDataBuff, &vosStatus, usActualHLen, 
-                        ucMPDUHLen, pTLCb, ucSTAId);
+                        ucMPDUHLen, pTLCb, ucSTAId, bForwardIAPPwithLLC);
 
       if ( VOS_STATUS_SUCCESS != vosStatus )
       {
@@ -8289,7 +8316,8 @@ WLANTL_STARxDisc
 (
   v_PVOID_t     pvosGCtx,
   v_U8_t        ucSTAId,
-  vos_pkt_t**   pvosDataBuff
+  vos_pkt_t**   pvosDataBuff,
+  v_BOOL_t      bForwardIAPPwithLLC
 )
 {
   /*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -*/
@@ -9080,7 +9108,11 @@ WLANTL_Translate8023To80211Header
   WLANTL_STAClientType*  pClientSTA = NULL;
   v_U8_t                 ucQoSOffset = WLAN80211_MANDATORY_HEADER_SIZE;
   v_U8_t                 ucStaId;
-
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+  v_BOOL_t               bIAPPTxwithLLC = VOS_FALSE;
+  v_SIZE_t               wIAPPSnapSize = WLANTL_LLC_HEADER_LEN;
+  v_U8_t                 wIAPPSnap[WLANTL_LLC_HEADER_LEN] = {0};
+#endif
   *ucWDSEnabled = 0; // default WDS off.
   vosStatus = vos_pkt_pop_head( vosDataBuff, &w8023Header,
                                 sizeof(w8023Header));
@@ -9139,8 +9171,28 @@ WLANTL_Translate8023To80211Header
   }
 #endif
 
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+if ((0 == w8023Header.usLenType) && (pClientSTA->wSTADesc.ucIsCcxSta))
+{
+    vos_pkt_extract_data(vosDataBuff,0,&wIAPPSnap[0],&wIAPPSnapSize);
+    if (vos_mem_compare(wIAPPSnap,WLANTL_AIRONET_SNAP_HEADER,WLANTL_LLC_HEADER_LEN))
+    {
+        /*The SNAP and the protocol type are already in the data buffer.
+         They are filled by the application (wpa_supplicant). So, Skip Adding LLC below.*/
+         bIAPPTxwithLLC = VOS_TRUE;
+    }
+    else
+    {
+        bIAPPTxwithLLC = VOS_FALSE;
+    }
+}
+#endif /* FEATURE_WLAN_CCX_UPLOAD */
 
-  if ( 0 != pClientSTA->wSTADesc.ucAddRmvLLC )
+  if ((0 != pClientSTA->wSTADesc.ucAddRmvLLC)
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+      && (!bIAPPTxwithLLC)
+#endif /* FEATURE_WLAN_CCX_UPLOAD */
+     )
   {
     /* Push the length */
     vosStatus = vos_pkt_push_head(vosDataBuff,
@@ -9185,6 +9237,9 @@ WLANTL_Translate8023To80211Header
   }/*If add LLC is enabled*/
   else
   {
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+      bIAPPTxwithLLC = VOS_FALSE; /*Reset the Flag here to start afresh with the next TX pkt*/
+#endif /* FEATURE_WLAN_CCX_UPLOAD */
        TLLOG2(VOS_TRACE( VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO_HIGH,
                  "WLAN TL: STA Client registered to not remove LLC"
                   " WLANTL_Translate8023To80211Header"));
@@ -9452,7 +9507,8 @@ WLANTL_Translate80211To8023Header
   v_U16_t         usActualHLen,
   v_U8_t          ucHeaderLen,
   WLANTL_CbType*  pTLCb,
-  v_U8_t          ucSTAId
+  v_U8_t          ucSTAId,
+  v_BOOL_t        bForwardIAPPwithLLC
 )
 {
   WLANTL_8023HeaderType  w8023Header;
@@ -9542,7 +9598,11 @@ WLANTL_Translate80211To8023Header
       return VOS_STATUS_E_FAILURE;
   }
 
-  if ( 0 != pTLCb->atlSTAClients[ucSTAId]->wSTADesc.ucAddRmvLLC )
+  if ( 0 != pTLCb->atlSTAClients[ucSTAId]->wSTADesc.ucAddRmvLLC
+#ifdef FEATURE_WLAN_CCX_UPLOAD
+    && (!bForwardIAPPwithLLC)
+#endif /*  FEATURE_WLAN_CCX_UPLOAD */
+     )
   {
     // Extract the LLC header
     vosStatus = vos_pkt_pop_head( vosDataBuff, aucLLCHeader,
@@ -11694,15 +11754,6 @@ VOS_STATUS WLANTL_ReadSNR
    }
 
    currentSNR = WLANTL_GETSNR(pBDHeader);
-
-   /* SNR reported in the Buffer Descriptor is scaled up by 2(SNR*2),
-    * Get the correct SNR value
-    */
-   currentSNR = currentSNR >> 1;
-
-   /* SNR reported by HW cannot be more than 35dB due to HW limitations */
-   currentSNR = (WLANTL_MAX_HW_SNR > currentSNR ? currentSNR :
-                                                  WLANTL_MAX_HW_SNR);
 
    TLLOG2(VOS_TRACE(VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO_HIGH,
           "%s: snrsum: %d snridx: %d prevsnravg: %d",

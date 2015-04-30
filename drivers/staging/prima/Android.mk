@@ -1,8 +1,5 @@
 # Android makefile for the WLAN Module
 
-# Assume no targets will be supported
-WLAN_CHIPSET :=
-
 # Build/Package options for 8960 target
 ifeq ($(call is-board-platform,msm8960),true)
 WLAN_CHIPSET := prima
@@ -83,6 +80,10 @@ KBUILD_OPTIONS := WLAN_ROOT=../$(WLAN_BLD_DIR)/prima
 KBUILD_OPTIONS += MODNAME=wlan
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(WLAN_SELECT)
+
+
+VERSION=$(shell grep -w "VERSION =" $(TOP)/kernel/Makefile | sed 's/^VERSION = //' )
+PATCHLEVEL=$(shell grep -w "PATCHLEVEL =" $(TOP)/kernel/Makefile | sed 's/^PATCHLEVEL = //' )
 
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(WLAN_CHIPSET)_wlan.ko

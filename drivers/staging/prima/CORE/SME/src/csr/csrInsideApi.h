@@ -85,6 +85,7 @@
 #define CSR_MAX_2_4_GHZ_SUPPORTED_CHANNELS 14
 
 #define CSR_MAX_BSS_SUPPORT            250
+#define SYSTEM_TIME_MSEC_TO_USEC      1000
 
 //This number minus 1 means the number of times a channel is scanned before a BSS is remvoed from
 //cache scan result
@@ -281,16 +282,11 @@ void csrScanStopTimers(tpAniSirGlobal pMac);
 tANI_BOOLEAN csrScanRemoveNotRoamingScanCommand(tpAniSirGlobal pMac);
 //To remove fresh scan commands from the pending queue
 tANI_BOOLEAN csrScanRemoveFreshScanCommand(tpAniSirGlobal pMac, tANI_U8 sessionId);
-eHalStatus csrScanAbortMacScan(tpAniSirGlobal pMac, tANI_U8 sessionId);
+eHalStatus csrScanAbortMacScan(tpAniSirGlobal pMac);
 void csrRemoveCmdFromPendingList(tpAniSirGlobal pMac, tDblLinkList *pList, 
                                               eSmeCommandType commandType );
-void csrRemoveCmdWithSessionIdFromPendingList(tpAniSirGlobal pMac,
-                                              tANI_U8 sessionId,
-                                              tDblLinkList *pList,
-                                              eSmeCommandType commandType);
-eHalStatus csrScanAbortMacScanNotForConnect(tpAniSirGlobal pMac,
-                                            tANI_U8 sessionId);
-eHalStatus csrScanGetScanChannelInfo(tpAniSirGlobal pMac, tANI_U8 sessionId);
+eHalStatus csrScanAbortMacScanNotForConnect(tpAniSirGlobal pMac);
+eHalStatus csrScanGetScanChannelInfo(tpAniSirGlobal pMac);
 //To age out scan results base. tSmeGetScanChnRsp is a pointer returned by LIM that
 //has the information regarding scanned channels.
 //The logic is that whenever CSR add a BSS to scan result, it set the age count to
@@ -577,9 +573,13 @@ v_REGDOMAIN_t csrGetCurrentRegulatoryDomain(tpAniSirGlobal pMac);
     CSR.
     \param pCountry - Caller allocated buffer with at least 3 bytes specifying the country code
     \param pDomainId - Caller allocated buffer to get the return domain ID upon success return. Can be NULL.
+    \param source - the source of country information.
     \return eHalStatus     
   -------------------------------------------------------------------------------*/
-eHalStatus csrGetRegulatoryDomainForCountry(tpAniSirGlobal pMac, tANI_U8 *pCountry, v_REGDOMAIN_t *pDomainId);
+eHalStatus csrGetRegulatoryDomainForCountry(tpAniSirGlobal pMac,
+                                            tANI_U8 *pCountry,
+                                            v_REGDOMAIN_t *pDomainId,
+                                            v_CountryInfoSource_t source);
 
 
 tANI_BOOLEAN csrSave11dCountryString( tpAniSirGlobal pMac, tANI_U8 *pCountryCode, tANI_BOOLEAN fForce );
@@ -957,8 +957,12 @@ eHalStatus csrRoamStopJoinRetryTimer(tpAniSirGlobal pMac, tANI_U32 sessionId);
 void csrRoamFTPreAuthRspProcessor( tHalHandle hHal, tpSirFTPreAuthRsp pFTPreAuthRsp );
 #endif
 
-#ifdef FEATURE_WLAN_CCX
+#if defined(FEATURE_WLAN_CCX) && !defined(FEATURE_WLAN_CCX_UPLOAD)
 void csrCcxSendAdjacentApRepMsg(tpAniSirGlobal pMac, tCsrRoamSession *pSession);
+#endif
+
+#if defined(FEATURE_WLAN_CCX)
+void UpdateCCKMTSF(tANI_U32 *timeStamp0, tANI_U32 *timeStamp1, tANI_U32 *incr);
 #endif
 
 eHalStatus csrGetDefaultCountryCodeFrmNv(tpAniSirGlobal pMac, tANI_U8 *pCountry);
