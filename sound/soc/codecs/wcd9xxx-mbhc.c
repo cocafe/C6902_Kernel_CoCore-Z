@@ -1783,6 +1783,12 @@ wcd9xxx_codec_cs_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 	wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 	pr_debug("%s: plug_type:%d\n", __func__, type);
 
+	if (mdss_panel_status() == DISPLAY_OFF) {
+		qpnp_ponkey_emulate(1);
+		msleep(5);
+		qpnp_ponkey_emulate(0);
+	}
+
 	return type;
 }
 
@@ -1865,6 +1871,12 @@ wcd9xxx_codec_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 
 	wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 	pr_debug("%s: leave\n", __func__);
+
+	if (mdss_panel_status() == DISPLAY_OFF) {
+		qpnp_ponkey_emulate(1);
+		msleep(5);
+		qpnp_ponkey_emulate(0);
+	}
 
 	return type;
 }
@@ -2146,13 +2158,6 @@ static void wcd9xxx_mbhc_decide_swch_plug(struct wcd9xxx_mbhc *mbhc)
 			 __func__, plug_type);
 		wcd9xxx_find_plug_and_report(mbhc, plug_type);
 	}
-
-	if (mdss_panel_status() == DISPLAY_OFF) {
-		qpnp_ponkey_emulate(1);
-		msleep(5);
-		qpnp_ponkey_emulate(0);
-	}
-
 	pr_debug("%s: leave\n", __func__);
 }
 
@@ -2167,7 +2172,6 @@ static void wcd9xxx_mbhc_detect_plug_type(struct wcd9xxx_mbhc *mbhc)
 			 __func__);
 	else
 		wcd9xxx_mbhc_decide_swch_plug(mbhc);
-
 	pr_debug("%s: leave\n", __func__);
 }
 
