@@ -20,8 +20,6 @@
 #include <linux/ratelimit.h>
 #include <linux/debugfs.h>
 #include <linux/list.h>
-#include <linux/mdss_dsi_panel.h>
-#include <linux/qpnp/power-on.h>
 #include <linux/mfd/wcd9xxx/core.h>
 #include <linux/mfd/wcd9xxx/core-resource.h>
 #include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
@@ -1783,12 +1781,6 @@ wcd9xxx_codec_cs_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 	wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 	pr_debug("%s: plug_type:%d\n", __func__, type);
 
-	if (mdss_panel_status() == DISPLAY_OFF) {
-		qpnp_ponkey_emulate(1);
-		msleep(5);
-		qpnp_ponkey_emulate(0);
-	}
-
 	return type;
 }
 
@@ -1871,13 +1863,6 @@ wcd9xxx_codec_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 
 	wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 	pr_debug("%s: leave\n", __func__);
-
-	if (mdss_panel_status() == DISPLAY_OFF) {
-		qpnp_ponkey_emulate(1);
-		msleep(5);
-		qpnp_ponkey_emulate(0);
-	}
-
 	return type;
 }
 
